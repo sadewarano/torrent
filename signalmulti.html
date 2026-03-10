@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat Broadcast - Optimized Tree</title>
+<title>P2P Multi Chat Broadcast - Ultra Fast</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
 body{
@@ -98,26 +98,11 @@ button{
   padding:10px 16px;
   border-radius:20px;
 }
-.netStatus{
-  font-size:12px;
-  background:#fff;
-  padding:6px 10px;
-  border-top:1px solid #ddd;
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-}
-.netItem{
-  background:#f2f2f2;
-  padding:3px 7px;
-  border-radius:10px;
-  font-family:monospace;
-}
 </style>
 </head>
 <body>
 
-<header>P2P Multi Chat Broadcast - Optimized Tree</header>
+<header>P2P Multi Chat Broadcast - Ultra Fast</header>
 
 <div class="status">
 Peers connected: <b id="count">0</b>
@@ -139,12 +124,10 @@ Peers connected: <b id="count">0</b>
   <button class="send" onclick="sendMsg()">Send</button>
 </div>
 
-<div id="netStatus" class="netStatus"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
 const myUser="User"+uid();
-let peers={}, channels={}, seenMsgs=new Set(), networkPeers={};
+let peers={}, channels={}, seenMsgs=new Set();
 
 function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
 
@@ -198,27 +181,14 @@ function processCode(){
 function setupChannel(id){
   channels[id].onopen=()=>{
     updateCount();
-    broadcastPeerList();
   };
   channels[id].onmessage=(e)=>{
     let msgObj;
-    try{
-      msgObj=JSON.parse(e.data);
-    }catch{
-      msgObj={id:uid(), text:e.data, sender:id};
-    }
-    if(msgObj.type==="peerlist"){
-      networkPeers[msgObj.user]=msgObj.peersList;
-      updateNetworkUI();
-      return;
-    }
-    // tree-aware broadcast
+    try{ msgObj=JSON.parse(e.data); }catch{ msgObj={id:uid(), text:e.data, sender:id}; }
     broadcastMessage(msgObj,id);
   };
   channels[id].onclose=()=>{
     updateCount();
-    delete networkPeers[id];
-    updateNetworkUI();
   };
 }
 
@@ -226,7 +196,6 @@ function sendMsg(){
   let text=msg.value.trim();
   if(!text) return;
   let msgObj={id:uid(), text:text, sender:myUser};
-  // langsung ke semua connected peers (tree aware)
   for(let id in channels){
     if(channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
@@ -240,7 +209,6 @@ function sendMsg(){
 function broadcastMessage(msgObj,idFrom){
   if(seenMsgs.has(msgObj.id)) return;
   seenMsgs.add(msgObj.id);
-  // relay hanya ke children (tidak ke parent)
   for(let id in channels){
     if(id!==idFrom && channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
@@ -255,32 +223,6 @@ function addMessage(msgObj){
   div.innerText=msgObj.sender+" : "+msgObj.text;
   chat.appendChild(div);
   chat.scrollTop=chat.scrollHeight;
-}
-
-function broadcastPeerList(){
-  let msg={type:"peerlist", user:myUser, peersList:Object.keys(channels)};
-  for(let id in channels){
-    if(channels[id].readyState==="open") channels[id].send(JSON.stringify(msg));
-  }
-  updateNetworkUI();
-}
-
-function updateNetworkUI(){
-  netStatus.innerHTML="";
-  for(let id in channels){
-    if(channels[id].readyState==="open"){
-      let div=document.createElement("span");
-      div.className="netItem";
-      div.innerText="🟢 "+id;
-      netStatus.appendChild(div);
-    }
-  }
-  for(let user in networkPeers){
-    let div=document.createElement("span");
-    div.className="netItem";
-    div.innerText="🔗 "+user+" ⇄ "+networkPeers[user].join(", ");
-    netStatus.appendChild(div);
-  }
 }
 
 function updateCount(){
