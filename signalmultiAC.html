@@ -3,106 +3,68 @@
 <head>
 <meta charset="UTF-8">
 <title>Minimal P2P Chat</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
-body{font-family:Arial;margin:0;display:flex;flex-direction:column;height:100vh;background:#e5ddd5;}
-header{background:#075E54;color:white;padding:12px;text-align:center;font-weight:bold;}
-.status{background:white;padding:8px;text-align:center;font-size:14px;border-bottom:1px solid #ddd;}
-.controls{background:white;padding:10px;border-bottom:1px solid #ddd;}
-textarea{width:100%;height:70px;border-radius:6px;border:1px solid #ccc;padding:6px;margin-top:5px;font-size:16px;}
-button{background:#128C7E;color:white;border:none;padding:8px 12px;border-radius:6px;margin-top:5px;}
-.chat{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;background:#f9f9f9;}
-.msg{max-width:70%;padding:8px 10px;border-radius:10px;font-size:14px;word-wrap:break-word;}
-.me{align-self:flex-end;background:#dcf8c6;}
-.peer{align-self:flex-start;background:white;}
-.inputBar{display:flex;gap:5px;padding:8px;border-top:1px solid #ddd;background:white;}
-.inputBar input{flex:1;padding:10px;border-radius:20px;border:1px solid #ccc;font-size:16px;}
-.send{background:#128C7E;border:none;color:white;padding:10px 16px;border-radius:20px;}
+body{font-family:Arial;margin:0;display:flex;flex-direction:column;height:100vh;}
+header{background:#075E54;color:white;padding:10px;text-align:center;}
+#chat{flex:1;overflow:auto;padding:5px;background:#f9f9f9;}
+.inputBar{display:flex;padding:5px;}
+input{flex:1;padding:8px;margin-right:5px;}
+button{padding:8px;background:#128C7E;color:white;border:none;}
+.msg{margin:2px 0;}
+.me{color:green;}
+.peer{color:blue;}
 </style>
 </head>
 <body>
 
 <header>Minimal P2P Chat</header>
-
-<div class="status">Peers connected: <b id="count">0</b></div>
-
-<div class="controls">
-<button onclick="createOfferMinimal()">Generate Offer</button>
-<textarea id="connCode" placeholder="Offer / Answer"></textarea>
-<div style="display:flex;gap:5px;margin-top:5px;">
-<button onclick="copyText('connCode')">Copy</button>
-<button onclick="pasteText()">Paste</button>
-</div>
-</div>
-
-<div id="chat" class="chat"></div>
-
+<div id="chat"></div>
 <div class="inputBar">
-<input id="msg" placeholder="Type message...">
-<button class="send" onclick="sendMsgMinimal()">Send</button>
+  <input id="msg" placeholder="Type...">
+  <button onclick="sendMsg()">Send</button>
 </div>
+<textarea id="conn" placeholder="Offer / Answer" style="width:100%;height:50px;margin-top:5px;"></textarea>
+<button onclick="process()">Connect</button>
 
-<script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
-let pcGlobal, channelGlobal, myUser="User"+Math.floor(Math.random()*10000);
+let pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+let ch = pc.createDataChannel("c");
+ch.onmessage = e => addMsg(e.data, 'peer');
+ch.onopen = () => console.log("Channel open");
+pc.onicecandidate = e => { if(!e.candidate) conn.value = JSON.stringify(pc.localDescription); }
 
-// Minimal add message
-function addMsg(sender,text){
-  let div=document.createElement("div");
-  div.className = (sender===myUser) ? "msg me":"msg peer";
-  div.innerText = sender+" : "+text;
-  document.getElementById("chat").appendChild(div);
-  document.getElementById("chat").scrollTop=document.getElementById("chat").scrollHeight;
+function uid(){return "U"+Math.floor(Math.random()*10000);}
+let myId = uid();
+
+function addMsg(txt,cls){
+  let d = document.createElement('div'); d.className='msg '+cls; d.textContent=txt; chat.appendChild(d); chat.scrollTop=chat.scrollHeight;
 }
 
-// Minimal offer
-function createOfferMinimal(){
-  let pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-  let ch = pc.createDataChannel("chat");
-  channelGlobal = ch;
-  ch.onopen=()=>updateCount();
-  ch.onmessage = e => addMsg("peer", e.data);
-  pc.createOffer().then(o=>pc.setLocalDescription(o));
-  pc.onicecandidate = e=>{
-    if(!e.candidate){
-      document.getElementById("connCode").value = LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
-      pcGlobal = pc;
-    }
-  };
+function sendMsg(){
+  let t = msg.value.trim(); if(!t) return;
+  ch.send(t); addMsg(t,'me'); msg.value='';
 }
 
-// Minimal answer / paste
-function pasteText(){
-  navigator.clipboard.readText().then(text=>{
-    let sdp=LZString.decompressFromEncodedURIComponent(text.trim());
-    let pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-    pc.ondatachannel = e=>{
-      channelGlobal = e.channel;
-      e.channel.onmessage = ev => addMsg("peer", ev.data);
-      e.channel.onopen = ()=>updateCount();
-    };
-    pc.setRemoteDescription({type:"offer",sdp:sdp}).then(()=>{
-      pc.createAnswer().then(a=>{
-        pc.setLocalDescription(a).then(()=>{
-          document.getElementById("connCode").value = LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
-        });
-      });
-    });
-    pcGlobal = pc;
-  });
+async function process(){
+  let data = JSON.parse(conn.value);
+  if(data.type==='offer'){
+    await pc.setRemoteDescription(data);
+    let a = await pc.createAnswer();
+    await pc.setLocalDescription(a);
+    conn.value = JSON.stringify(pc.localDescription);
+  } else if(data.type==='answer'){
+    await pc.setRemoteDescription(data);
+  }
 }
 
-// Send message minimal
-function sendMsgMinimal(){
-  let text=document.getElementById("msg").value.trim();
-  if(!text || !channelGlobal || channelGlobal.readyState!=="open") return;
-  channelGlobal.send(text);
-  addMsg(myUser,text);
-  document.getElementById("msg").value="";document.getElementById("msg").focus();
+async function createOffer(){
+  let o = await pc.createOffer();
+  await pc.setLocalDescription(o);
+  conn.value = JSON.stringify(pc.localDescription);
 }
 
-function updateCount(){document.getElementById("count").innerText=(channelGlobal&&channelGlobal.readyState==="open")?1:0;}
-function copyText(id){let t=document.getElementById(id); t.select();document.execCommand("copy");}
+// auto create minimal offer on load
+createOffer();
 </script>
 
 </body>
