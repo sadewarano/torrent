@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat Broadcast</title>
+<title>P2P Multi Chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
@@ -130,7 +130,7 @@ border-bottom:1px dashed #ccc;
 
 <body>
 
-<header>P2P Multi Chat Broadcast</header>
+<header>P2P Multi Chat</header>
 
 <div class="status">
 User: <b id="myName"></b> |
@@ -173,16 +173,44 @@ let peers={}
 let channels={}
 let seenMsgs=new Set()
 
-let username=prompt("Enter your username") || "User"+Math.floor(Math.random()*1000)
+/* USERNAME PERSISTENT */
+
+function randomUser(){
+
+let chars="abcdefghijklmnopqrstuvwxyz0123456789"
+let name="u"
+
+for(let i=0;i<6;i++){
+name+=chars[Math.floor(Math.random()chars.length)]
+}
+
+name+=Date.now().toString().slice(-3)
+
+return name
+}
+
+let username=localStorage.getItem("p2pUser")
+
+if(!username){
+username=randomUser()
+localStorage.setItem("p2pUser",username)
+}
+
 document.getElementById("myName").innerText=username
+
+
+/ MESSAGE ID */
 
 function uid(){
 return "m"+Date.now()+Math.floor(Math.random()*10000)
 }
 
 function pid(){
-return "p"+Date.now()+Math.floor(Math.random()*10000)
+return "p"+Date.now()+Math.floor(Math.random()10000)
 }
+
+
+/ PEER CONNECTION /
 
 function newPeer(id){
 
@@ -199,6 +227,9 @@ peers[id]=pc
 
 return pc
 }
+
+
+/ CREATE OFFER /
 
 function createOffer(){
 
@@ -217,13 +248,15 @@ pc.onicecandidate=e=>{
 if(!e.candidate){
 
 let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
-
 myCode.value=id+"o"+s
 
 }
 }
 
 }
+
+
+/ PROCESS CODE /
 
 function processCode(){
 
@@ -249,7 +282,6 @@ pc.onicecandidate=e=>{
 if(!e.candidate){
 
 let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
-
 myCode.value=id+"a"+s
 
 }
@@ -265,6 +297,9 @@ pc.setRemoteDescription({type:"answer",sdp:sdp})
 
 }
 
+
+/ CHANNEL SETUP /
+
 function setupChannel(id){
 
 channels[id].onopen=updateCount
@@ -277,11 +312,14 @@ channels[id].onclose=updateCount
 
 }
 
+
+/ SEND MESSAGE /
+
 function sendMsg(){
 
 let text=msg.value.trim()
 
-if(!text)return
+if(!text) return
 
 let message={
 id:uid(),
@@ -289,13 +327,22 @@ user:username,
 text:text
 }
 
-broadcast(JSON.stringify(message))
+let raw=JSON.stringify(message)
+
+seenMsgs.add(message.id)
+
+broadcast(raw)
 
 addChat(text,true)
+
+addBroadcast(username,text)
 
 msg.value=""
 
 }
+
+
+/ RECEIVE MESSAGE /
 
 function handleIncoming(raw,from){
 
@@ -306,12 +353,14 @@ if(seenMsgs.has(message.id)) return
 seenMsgs.add(message.id)
 
 addChat(message.text,false,message.user)
-
 addBroadcast(message.user,message.text)
 
 broadcast(raw,from)
 
 }
+
+
+/ BROADCAST /
 
 function broadcast(raw,except=null){
 
@@ -320,14 +369,15 @@ for(let id in channels){
 let ch=channels[id]
 
 if(ch.readyState==="open" && id!==except){
-
 ch.send(raw)
-
 }
 
 }
 
 }
+
+
+/ UI CHAT /
 
 function addChat(text,isMe,user=""){
 
@@ -335,13 +385,16 @@ let div=document.createElement("div")
 
 div.className="msg "+(isMe?"me":"peer")
 
-div.innerText=(isMe?"":user+": ")+text
+div.innerText=isMe ? text : user+": "+text
 
 chat.appendChild(div)
 
 chat.scrollTop=chat.scrollHeight
 
 }
+
+
+/ UI BROADCAST /
 
 function addBroadcast(user,text){
 
@@ -357,26 +410,28 @@ broadcast.scrollTop=broadcast.scrollHeight
 
 }
 
+
+/ PEER COUNT /
+
 function updateCount(){
 
 let n=0
 
 for(let id in channels){
-
 if(channels[id].readyState==="open") n++
-
 }
 
 count.innerText=n
 
 }
 
+
+/ COPY / PASTE /
+
 function copyText(id){
 
 let t=document.getElementById(id)
-
 t.select()
-
 document.execCommand("copy")
 
 }
@@ -384,10 +439,12 @@ document.execCommand("copy")
 async function pasteText(id){
 
 let text=await navigator.clipboard.readText()
-
 document.getElementById(id).value=text
 
 }
+
+
+/ ENTER SEND */
 
 msg.addEventListener("keypress",function(e){
 
