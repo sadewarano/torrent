@@ -2,21 +2,14 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat WebRTC</title>
+<title>P2P Multi Chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
 body{
 font-family:Arial;
 background:#f2f2f2;
-margin:0;
 padding:15px;
-}
-
-h2{
-text-align:center;
 }
 
 textarea{
@@ -28,26 +21,21 @@ padding:8px;
 }
 
 #chat{
-height:200px;
+height:220px;
 }
 
 button{
 padding:10px;
-margin-top:5px;
 border:none;
 border-radius:8px;
 background:#2196F3;
 color:white;
-font-size:14px;
+margin-top:5px;
 }
 
 .row{
 display:flex;
 gap:5px;
-}
-
-.row button{
-flex:1;
 }
 
 .status{
@@ -56,20 +44,6 @@ padding:8px;
 border-radius:8px;
 margin-bottom:10px;
 text-align:center;
-}
-
-#qr{
-margin-top:10px;
-text-align:center;
-}
-
-#qr img{
-width:220px;
-}
-
-#reader{
-width:100%;
-margin-top:10px;
 }
 
 input{
@@ -87,35 +61,30 @@ width:28%;
 
 <body>
 
-<h2>P2P Chat</h2>
+<h2>P2P Multi User Chat</h2>
 
 <div class="status">
-Status: <b id="status">Disconnected</b>
+Peers connected: <b id="count">0</b>
 </div>
 
-<h3>Your Code</h3>
+<h3>Create Connection</h3>
 
-<button onclick="generateCode()">Generate Code</button>
+<button onclick="createOffer()">Generate Offer</button>
 
 <textarea id="myCode"></textarea>
-
-<div id="qr"></div>
 
 <div class="row">
 <button onclick="copyText('myCode')">Copy</button>
 </div>
 
-<h3>Partner Code</h3>
+<h3>Connect Peer</h3>
 
-<textarea id="partnerCode" placeholder="Paste atau Scan QR"></textarea>
+<textarea id="partnerCode"></textarea>
 
 <div class="row">
 <button onclick="pasteText('partnerCode')">Paste</button>
-<button onclick="startScan()">Scan QR</button>
-<button onclick="processPartner()">Connect</button>
+<button onclick="connectPeer()">Connect</button>
 </div>
-
-<div id="reader"></div>
 
 <h3>Chat</h3>
 
@@ -123,156 +92,155 @@ Status: <b id="status">Disconnected</b>
 
 <br><br>
 
-<input id="msg" placeholder="Ketik pesan...">
+<input id="msg" placeholder="message">
 <button class="send" onclick="sendMsg()">Send</button>
 
 <script>
 
+let peers={}
+let channels={}
+let peerIndex=0
+
+function createPeer(id){
+
 let pc=new RTCPeerConnection({
-iceServers:[
-{urls:"stun:stun.l.google.com:19302"}
-]
-});
-
-let channel;
-
-function generateCode(){
-
-channel=pc.createDataChannel("chat");
-
-setupChannel();
-
-pc.createOffer().then(o=>{
-pc.setLocalDescription(o);
-});
-
-pc.onicecandidate=e=>{
-if(!e.candidate){
-let code=JSON.stringify(pc.localDescription);
-myCode.value=code;
-showQR(code);
-}
-};
-
-}
-
-function processPartner(){
-
-let data=JSON.parse(partnerCode.value);
-
-if(data.type==="offer"){
-
-pc.setRemoteDescription(data);
+iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+})
 
 pc.ondatachannel=e=>{
-channel=e.channel;
-setupChannel();
-};
+channels[id]=e.channel
+setupChannel(id)
+}
 
-pc.createAnswer().then(a=>{
-pc.setLocalDescription(a);
-});
+return pc
+}
+
+function createOffer(){
+
+let id="peer"+(++peerIndex)
+
+let pc=createPeer(id)
+
+let channel=pc.createDataChannel("chat")
+
+channels[id]=channel
+
+setupChannel(id)
+
+pc.createOffer().then(o=>{
+pc.setLocalDescription(o)
+})
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
-let code=JSON.stringify(pc.localDescription);
-myCode.value=code;
-showQR(code);
+myCode.value=JSON.stringify({
+id:id,
+sdp:pc.localDescription
+})
+peers[id]=pc
 }
-};
-
-}
-
-else if(data.type==="answer"){
-
-pc.setRemoteDescription(data);
-
 }
 
 }
 
-function showQR(text){
+function connectPeer(){
 
-let url="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data="+encodeURIComponent(text);
+let data=JSON.parse(partnerCode.value)
 
-document.getElementById("qr").innerHTML='<img src="'+url+'">';
+let id=data.id
+
+let pc=createPeer(id)
+
+pc.setRemoteDescription(data.sdp)
+
+if(data.sdp.type==="offer"){
+
+pc.createAnswer().then(a=>{
+pc.setLocalDescription(a)
+})
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+myCode.value=JSON.stringify({
+id:id,
+sdp:pc.localDescription
+})
+}
+}
 
 }
 
-function startScan(){
-
-let scanner=new Html5Qrcode("reader");
-
-scanner.start(
-{ facingMode: "environment" },
-{ fps:10, qrbox:250 },
-(qrMessage)=>{
-
-partnerCode.value=qrMessage;
-
-scanner.stop();
-
-alert("QR berhasil di scan");
-
-}
-);
+peers[id]=pc
 
 }
 
-function setupChannel(){
+function setupChannel(id){
 
-channel.onopen=()=>{
-status.innerText="Connected";
-};
+channels[id].onopen=()=>{
+updateCount()
+}
 
-channel.onmessage=e=>{
-chat.value+="Peer: "+e.data+"\n";
-chat.scrollTop=chat.scrollHeight;
-};
+channels[id].onmessage=e=>{
+
+chat.value+="Peer: "+e.data+"\n"
+
+chat.scrollTop=chat.scrollHeight
+
+}
 
 }
 
 function sendMsg(){
 
-let text=msg.value;
+let text=msg.value
 
-if(text==="")return;
+if(text==="")return
 
-channel.send(text);
+for(let id in channels){
 
-chat.value+="Me: "+text+"\n";
+if(channels[id].readyState==="open"){
 
-msg.value="";
+channels[id].send(text)
 
-chat.scrollTop=chat.scrollHeight;
+}
+
+}
+
+chat.value+="Me: "+text+"\n"
+
+msg.value=""
+
+chat.scrollTop=chat.scrollHeight
+
+}
+
+function updateCount(){
+
+let n=0
+
+for(let id in channels){
+if(channels[id].readyState==="open") n++
+}
+
+count.innerText=n
 
 }
 
 function copyText(id){
 
-let text=document.getElementById(id);
+let text=document.getElementById(id)
 
-text.select();
+text.select()
 
-document.execCommand("copy");
-
-alert("Copied");
+document.execCommand("copy")
 
 }
 
 async function pasteText(id){
 
-try{
+let text=await navigator.clipboard.readText()
 
-let text=await navigator.clipboard.readText();
-
-document.getElementById(id).value=text;
-
-}catch{
-
-alert("Paste tidak diizinkan browser");
-
-}
+document.getElementById(id).value=text
 
 }
 
