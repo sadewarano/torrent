@@ -2,11 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat Room</title>
+<title>P2P Chat WebRTC</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<style>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
+<style>
 body{
 font-family:Arial;
 background:#f2f2f2;
@@ -18,20 +19,12 @@ h2{
 text-align:center;
 }
 
-.status{
-background:white;
-padding:10px;
-border-radius:8px;
-text-align:center;
-margin-bottom:10px;
-}
-
 textarea{
 width:100%;
-height:120px;
+height:90px;
+margin-top:5px;
 border-radius:8px;
 padding:8px;
-margin-top:5px;
 }
 
 #chat{
@@ -45,6 +38,7 @@ border:none;
 border-radius:8px;
 background:#2196F3;
 color:white;
+font-size:14px;
 }
 
 .row{
@@ -56,48 +50,57 @@ gap:5px;
 flex:1;
 }
 
+.status{
+background:white;
+padding:8px;
+border-radius:8px;
+margin-bottom:10px;
+text-align:center;
+}
+
+#qr{
+margin-top:10px;
+text-align:center;
+}
+
 input{
-width:100%;
+width:70%;
 padding:10px;
 border-radius:8px;
 border:1px solid #ccc;
 }
 
+.send{
+width:28%;
+}
 </style>
-
 </head>
 
 <body>
 
-<h2>P2P Room Chat</h2>
-
-<div class="status">
-Status: <b id="status">Disconnected</b>
-</div>
-
-<h3>Room Code</h3>
-
-<input id="room" placeholder="Masukkan Room Code">
-
-<div class="row">
-<button onclick="createRoom()">Create Room</button>
-<button onclick="joinRoom()">Join Room</button>
-</div>
+<h2>P2P Chat</h2>
 
 <h3>Your Code</h3>
 
+<button onclick="generateCode()">Generate Code</button>
+
 <textarea id="myCode"></textarea>
 
+<div id="qr"></div>
+
 <div class="row">
-<button onclick="copyCode()">Copy</button>
-<button onclick="pasteCode()">Paste</button>
+<button onclick="copyText('myCode')">Copy</button>
+<button onclick="pasteText('myCode')">Paste</button>
 </div>
 
 <h3>Partner Code</h3>
 
-<textarea id="partnerCode"></textarea>
+<textarea id="partnerCode" placeholder="Paste partner code"></textarea>
 
-<button onclick="connectPeer()">Connect</button>
+<div class="row">
+<button onclick="pasteText('partnerCode')">Paste</button>
+<button onclick="processPartner()">Connect</button>
+</div>
 
 <h3>Chat</h3>
 
@@ -106,31 +109,19 @@ Status: <b id="status">Disconnected</b>
 <br><br>
 
 <input id="msg" placeholder="Ketik pesan...">
-<button onclick="sendMsg()">Send</button>
+<button class="send" onclick="sendMsg()">Send</button>
 
 <script>
 
-let pc;
-let channel;
-
-function init(){
-
-pc=new RTCPeerConnection({
+let pc=new RTCPeerConnection({
 iceServers:[
 {urls:"stun:stun.l.google.com:19302"}
 ]
 });
 
-pc.ondatachannel=e=>{
-channel=e.channel;
-setupChannel();
-};
+let channel;
 
-}
-
-init();
-
-function createRoom(){
+function generateCode(){
 
 channel=pc.createDataChannel("chat");
 
@@ -142,106 +133,115 @@ pc.setLocalDescription(o);
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
-
-let data={
-room:room.value,
-sdp:pc.localDescription
-}
-
-myCode.value=btoa(JSON.stringify(data))
-
+let code=JSON.stringify(pc.localDescription);
+myCode.value=code;
+generateQR(code);
 }
 };
 
 }
 
-function joinRoom(){
+function processPartner(){
 
-alert("Paste kode dari host lalu klik Connect")
+let data=JSON.parse(partnerCode.value);
 
-}
+if(data.type==="offer"){
 
-function connectPeer(){
+pc.setRemoteDescription(data);
 
-let data=JSON.parse(atob(partnerCode.value))
-
-if(data.sdp.type==="offer"){
-
-pc.setRemoteDescription(data.sdp)
+pc.ondatachannel=e=>{
+channel=e.channel;
+setupChannel();
+};
 
 pc.createAnswer().then(a=>{
-pc.setLocalDescription(a)
-})
+pc.setLocalDescription(a);
+});
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
-
-let ans={
-room:room.value,
-sdp:pc.localDescription
+let code=JSON.stringify(pc.localDescription);
+myCode.value=code;
+generateQR(code);
 }
-
-myCode.value=btoa(JSON.stringify(ans))
-
-}
-}
+};
 
 }
 
-else if(data.sdp.type==="answer"){
+else if(data.type==="answer"){
 
-pc.setRemoteDescription(data.sdp)
+pc.setRemoteDescription(data);
 
 }
+
+}
+
+function generateQR(text){
+
+document.getElementById("qr").innerHTML="";
+
+QRCode.toCanvas(text,{width:220},function(err,canvas){
+
+if(!err){
+document.getElementById("qr").appendChild(canvas);
+}
+
+});
 
 }
 
 function setupChannel(){
 
 channel.onopen=()=>{
-status.innerText="Connected"
-}
+status.innerText="Connected";
+};
 
 channel.onmessage=e=>{
-chat.value+="Peer: "+e.data+"\n"
-chat.scrollTop=chat.scrollHeight
-}
+chat.value+="Peer: "+e.data+"\n";
+chat.scrollTop=chat.scrollHeight;
+};
 
 }
 
 function sendMsg(){
 
-let text=msg.value
+let text=msg.value;
 
-if(text==="")return
+if(text==="")return;
 
-channel.send(text)
+channel.send(text);
 
-chat.value+="Me: "+text+"\n"
+chat.value+="Me: "+text+"\n";
 
-msg.value=""
+msg.value="";
 
-chat.scrollTop=chat.scrollHeight
-
-}
-
-function copyCode(){
-
-myCode.select()
-document.execCommand("copy")
+chat.scrollTop=chat.scrollHeight;
 
 }
 
-async function pasteCode(){
+function copyText(id){
+
+let text=document.getElementById(id);
+
+text.select();
+
+document.execCommand("copy");
+
+alert("Copied");
+
+}
+
+async function pasteText(id){
 
 try{
 
-let text=await navigator.clipboard.readText()
-partnerCode.value=text
+let text=await navigator.clipboard.readText();
+
+document.getElementById(id).value=text;
 
 }catch{
 
-alert("Paste tidak diizinkan")
+alert("Paste tidak diizinkan browser");
 
 }
 
