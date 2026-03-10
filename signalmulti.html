@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat Broadcast - Tree View</title>
+<title>P2P Multi Chat Broadcast - Optimized Tree</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
 body{
@@ -117,7 +117,7 @@ button{
 </head>
 <body>
 
-<header>P2P Multi Chat Broadcast - Tree View</header>
+<header>P2P Multi Chat Broadcast - Optimized Tree</header>
 
 <div class="status">
 Peers connected: <b id="count">0</b>
@@ -212,6 +212,7 @@ function setupChannel(id){
       updateNetworkUI();
       return;
     }
+    // tree-aware broadcast
     broadcastMessage(msgObj,id);
   };
   channels[id].onclose=()=>{
@@ -225,19 +226,30 @@ function sendMsg(){
   let text=msg.value.trim();
   if(!text) return;
   let msgObj={id:uid(), text:text, sender:myUser};
-  broadcastMessage(msgObj);
-  msg.value="";
-  msg.focus();
+  // langsung ke semua connected peers (tree aware)
+  for(let id in channels){
+    if(channels[id].readyState==="open"){
+      channels[id].send(JSON.stringify(msgObj));
+    }
+  }
+  addMessage(msgObj);
+  seenMsgs.add(msgObj.id);
+  msg.value=""; msg.focus();
 }
 
-function broadcastMessage(msgObj,idFrom=null){
+function broadcastMessage(msgObj,idFrom){
   if(seenMsgs.has(msgObj.id)) return;
   seenMsgs.add(msgObj.id);
+  // relay hanya ke children (tidak ke parent)
   for(let id in channels){
     if(id!==idFrom && channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
     }
   }
+  addMessage(msgObj);
+}
+
+function addMessage(msgObj){
   let div=document.createElement("div");
   div.className=(msgObj.sender===myUser)?"msg me":"msg peer";
   div.innerText=msgObj.sender+" : "+msgObj.text;
@@ -246,22 +258,15 @@ function broadcastMessage(msgObj,idFrom=null){
 }
 
 function broadcastPeerList(){
-  let msg={
-    type:"peerlist",
-    user:myUser,
-    peersList:Object.keys(channels)
-  };
+  let msg={type:"peerlist", user:myUser, peersList:Object.keys(channels)};
   for(let id in channels){
-    if(channels[id].readyState==="open"){
-      channels[id].send(JSON.stringify(msg));
-    }
+    if(channels[id].readyState==="open") channels[id].send(JSON.stringify(msg));
   }
   updateNetworkUI();
 }
 
 function updateNetworkUI(){
   netStatus.innerHTML="";
-  // langsung connected peers
   for(let id in channels){
     if(channels[id].readyState==="open"){
       let div=document.createElement("span");
@@ -270,7 +275,6 @@ function updateNetworkUI(){
       netStatus.appendChild(div);
     }
   }
-  // relay peers (tree view)
   for(let user in networkPeers){
     let div=document.createElement("span");
     div.className="netItem";
@@ -286,11 +290,7 @@ function updateCount(){
 }
 
 function copyText(id){let t=document.getElementById(id); t.select(); document.execCommand("copy");}
-async function pasteText(){
-  let text=await navigator.clipboard.readText();
-  connCode.value=text;
-  processCode();
-}
+async function pasteText(){let text=await navigator.clipboard.readText(); connCode.value=text; processCode(); }
 
 connCode.addEventListener("input",()=>{processCode();});
 msg.addEventListener("keypress",e=>{if(e.key==="Enter"){e.preventDefault();sendMsg();}});
