@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat Broadcast - Optimized Tree</title>
+<title>P2P Multi Chat Broadcast - Humanized Tree</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
 body{
@@ -117,7 +117,7 @@ button{
 </head>
 <body>
 
-<header>P2P Multi Chat Broadcast - Optimized Tree</header>
+<header>P2P Multi Chat Broadcast - Humanized Tree</header>
 
 <div class="status">
 Peers connected: <b id="count">0</b>
@@ -144,7 +144,7 @@ Peers connected: <b id="count">0</b>
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
 const myUser="User"+uid();
-let peers={}, channels={}, seenMsgs=new Set(), networkPeers={};
+let peers={}, channels={}, seenMsgs=new Set(), networkPeers={}, peerNames={};
 
 function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
 
@@ -199,25 +199,33 @@ function setupChannel(id){
   channels[id].onopen=()=>{
     updateCount();
     broadcastPeerList();
+    // kirim nama user ke peer
+    let msg={type:"introduce", user: myUser};
+    channels[id].send(JSON.stringify(msg));
   };
   channels[id].onmessage=(e)=>{
     let msgObj;
-    try{
-      msgObj=JSON.parse(e.data);
-    }catch{
-      msgObj={id:uid(), text:e.data, sender:id};
+    try{ msgObj=JSON.parse(e.data); }catch{ msgObj={id:uid(), text:e.data, sender:id}; }
+
+    if(msgObj.type==="introduce"){
+      peerNames[id]=msgObj.user;
+      updateNetworkUI();
+      return;
     }
+
     if(msgObj.type==="peerlist"){
       networkPeers[msgObj.user]=msgObj.peersList;
       updateNetworkUI();
       return;
     }
-    // tree-aware broadcast
+
+    // broadcast tree-aware
     broadcastMessage(msgObj,id);
   };
   channels[id].onclose=()=>{
     updateCount();
     delete networkPeers[id];
+    delete peerNames[id];
     updateNetworkUI();
   };
 }
@@ -226,7 +234,7 @@ function sendMsg(){
   let text=msg.value.trim();
   if(!text) return;
   let msgObj={id:uid(), text:text, sender:myUser};
-  // langsung ke semua connected peers (tree aware)
+  // kirim langsung ke semua peer
   for(let id in channels){
     if(channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
@@ -240,7 +248,6 @@ function sendMsg(){
 function broadcastMessage(msgObj,idFrom){
   if(seenMsgs.has(msgObj.id)) return;
   seenMsgs.add(msgObj.id);
-  // relay hanya ke children (tidak ke parent)
   for(let id in channels){
     if(id!==idFrom && channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
@@ -271,7 +278,7 @@ function updateNetworkUI(){
   let directPeers = [];
   for(let id in channels){
     if(channels[id].readyState==="open"){
-      directPeers.push(id);
+      directPeers.push(peerNames[id]||id);
     }
   }
 
@@ -281,12 +288,12 @@ function updateNetworkUI(){
     netStatus.appendChild(div);
   }
 
-  // peers di network tapi bukan langsung
   let indirectPeers = [];
   for(let user in networkPeers){
     networkPeers[user].forEach(p=>{
-      if(!directPeers.includes(p) && !indirectPeers.includes(p)){
-        indirectPeers.push(p);
+      let name = peerNames[p] || p;
+      if(!directPeers.includes(name) && !indirectPeers.includes(name)){
+        indirectPeers.push(name);
       }
     });
   }
