@@ -2,57 +2,138 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat</title>
+<title>P2P Mesh Chat Serverless</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
-body{font-family:Arial;background:#f2f2f2;padding:15px}
-textarea{width:100%;height:90px;margin-top:5px;border-radius:8px;padding:8px}
-#chat{height:220px}
-button{padding:10px;border:none;border-radius:8px;background:#2196F3;color:white;margin-top:5px}
-.row{display:flex;gap:5px}
-.status{background:white;padding:8px;border-radius:8px;margin-bottom:10px;text-align:center}
-input{width:70%;padding:10px;border-radius:8px;border:1px solid #ccc}
-.send{width:28%}
+body{
+font-family:Arial;
+background:#e5ddd5;
+margin:0;
+display:flex;
+flex-direction:column;
+height:100vh;
+}
+header{
+background:#075E54;
+color:white;
+padding:12px;
+text-align:center;
+font-weight:bold;
+}
+.status{
+background:white;
+padding:8px;
+text-align:center;
+font-size:14px;
+border-bottom:1px solid #ddd;
+}
+.controls{
+background:white;
+padding:10px;
+border-bottom:1px solid #ddd;
+}
+textarea{
+width:100%;
+height:70px;
+border-radius:6px;
+border:1px solid #ccc;
+padding:6px;
+margin-top:5px;
+}
+button{
+background:#128C7E;
+color:white;
+border:none;
+padding:8px 12px;
+border-radius:6px;
+margin-top:5px;
+}
+.row{
+display:flex;
+gap:5px;
+}
+.chat,.broadcast{
+flex:1;
+overflow-y:auto;
+padding:10px;
+display:flex;
+flex-direction:column;
+gap:8px;
+border-top:1px solid #ddd;
+background:#f9f9f9;
+}
+.msg{
+max-width:70%;
+padding:8px 10px;
+border-radius:10px;
+font-size:14px;
+word-wrap:break-word;
+}
+.me{align-self:flex-end;background:#dcf8c6;}
+.peer{align-self:flex-start;background:white;}
+.broadcast-msg{
+padding:6px 10px;
+background:#fff3cd;
+border-left:4px solid #ffc107;
+border-radius:6px;
+font-size:13px;
+}
+.inputBar{
+display:flex;
+background:white;
+padding:8px;
+gap:5px;
+border-top:1px solid #ddd;
+}
+.inputBar input{
+flex:1;
+padding:10px;
+border-radius:20px;
+border:1px solid #ccc;
+}
+.send{
+background:#128C7E;
+border:none;
+color:white;
+padding:10px 16px;
+border-radius:20px;
+}
 </style>
-
 </head>
 
 <body>
 
-<h2>P2P Multi User Chat</h2>
+<header>P2P Mesh Chat Serverless</header>
 
 <div class="status">
-Peers connected: <b id="count">0</b>
+Peers connected: <b id="count">0</b> |
+My ID: <span id="myid"></span>
 </div>
 
-<h3>Your Code</h3>
-
-<button onclick="createOffer()">Generate Offer</button>
-
-<textarea id="myCode"></textarea>
+<div class="controls">
+<button onclick="createOffer()">Generate Entry Offer</button>
+<textarea id="myCode" placeholder="Share this code to join network"></textarea>
 
 <div class="row">
 <button onclick="copyText('myCode')">Copy</button>
 </div>
 
-<h3>Partner Code</h3>
-
-<textarea id="partnerCode"></textarea>
+<textarea id="partnerCode" placeholder="Paste code here"></textarea>
 
 <div class="row">
 <button onclick="pasteText('partnerCode')">Paste</button>
-<button onclick="processCode()">Process</button>
+<button onclick="processCode()">Connect</button>
+</div>
 </div>
 
-<h3>Chat</h3>
+<div id="chat" class="chat"></div>
 
-<textarea id="chat" readonly></textarea>
-
-<br><br>
-
-<input id="msg" placeholder="message">
+<div class="inputBar">
+<input id="msg" placeholder="Type message...">
 <button class="send" onclick="sendMsg()">Send</button>
+</div>
+
+<div id="broadcast" class="broadcast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 
@@ -60,9 +141,15 @@ Peers connected: <b id="count">0</b>
 
 let peers={}
 let channels={}
+let seenPackets=new Set()
+let knownPeers=new Set()
+
+const myPeerId="p"+Math.random().toString(36).slice(2,10)
+
+document.getElementById("myid").innerText=myPeerId
 
 function uid(){
-return "p"+Date.now()+Math.floor(Math.random()*10000)
+return "m"+Date.now()+Math.floor(Math.random()*10000)
 }
 
 function newPeer(id){
@@ -77,18 +164,17 @@ setupChannel(id)
 }
 
 peers[id]=pc
-
 return pc
-
 }
 
 function createOffer(){
 
-let id=uid()
+let id="entry"+Date.now()
 
 let pc=newPeer(id)
 
 let ch=pc.createDataChannel("chat")
+
 channels[id]=ch
 
 setupChannel(id)
@@ -96,6 +182,7 @@ setupChannel(id)
 pc.createOffer().then(o=>pc.setLocalDescription(o))
 
 pc.onicecandidate=e=>{
+
 if(!e.candidate){
 
 let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
@@ -103,6 +190,7 @@ let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
 myCode.value=id+"o"+s
 
 }
+
 }
 
 }
@@ -111,7 +199,7 @@ function processCode(){
 
 let code=partnerCode.value.trim()
 
-let id=code.match(/^p\d+/)[0]
+let id=code.match(/^[^oa]+/)[0]
 
 let type=code[id.length]
 
@@ -119,7 +207,7 @@ let data=code.slice(id.length+1)
 
 let sdp=LZString.decompressFromEncodedURIComponent(data)
 
-let pc=peers[id] || newPeer(id)
+let pc=peers[id]||newPeer(id)
 
 if(type==="o"){
 
@@ -128,6 +216,7 @@ pc.setRemoteDescription({type:"offer",sdp:sdp})
 pc.createAnswer().then(a=>pc.setLocalDescription(a))
 
 pc.onicecandidate=e=>{
+
 if(!e.candidate){
 
 let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
@@ -135,6 +224,7 @@ let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
 myCode.value=id+"a"+s
 
 }
+
 }
 
 }
@@ -150,44 +240,133 @@ pc.setRemoteDescription({type:"answer",sdp:sdp})
 function setupChannel(id){
 
 channels[id].onopen=()=>{
+
 updateCount()
+
+announcePeer()
+
 }
 
 channels[id].onmessage=e=>{
 
-chat.value+="Peer: "+e.data+"\n"
-
-chat.scrollTop=chat.scrollHeight
+handlePacket(e.data,id)
 
 }
 
-channels[id].onclose=()=>{
-updateCount()
-}
+channels[id].onclose=updateCount
 
 }
 
 function sendMsg(){
 
-let text=msg.value
+let text=msg.value.trim()
 
 if(!text)return
 
-for(let id in channels){
+let packet={
 
-let ch=channels[id]
+id:uid(),
+type:"chat",
+from:myPeerId,
+text:text
 
-if(ch.readyState==="open"){
-ch.send(text)
 }
 
-}
+relayPacket(packet)
 
-chat.value+="Me: "+text+"\n"
+addMessage(text,true)
 
 msg.value=""
 
+}
+
+function announcePeer(){
+
+let packet={
+
+id:uid(),
+type:"peer-announce",
+from:myPeerId
+
+}
+
+relayPacket(packet)
+
+}
+
+function handlePacket(raw,from){
+
+let packet
+
+try{
+packet=JSON.parse(raw)
+}catch{return}
+
+if(seenPackets.has(packet.id))return
+
+seenPackets.add(packet.id)
+
+if(packet.type==="chat"){
+
+addMessage(packet.text,false)
+
+}
+
+if(packet.type==="peer-announce"){
+
+if(packet.from!==myPeerId){
+
+knownPeers.add(packet.from)
+
+}
+
+}
+
+relayPacket(packet,from)
+
+logBroadcast(packet)
+
+}
+
+function relayPacket(packet,from=null){
+
+for(let id in channels){
+
+if(id!==from && channels[id].readyState==="open"){
+
+channels[id].send(JSON.stringify(packet))
+
+}
+
+}
+
+}
+
+function addMessage(text,isMe){
+
+let div=document.createElement("div")
+
+div.className="msg "+(isMe?"me":"peer")
+
+div.innerText=text
+
+chat.appendChild(div)
+
 chat.scrollTop=chat.scrollHeight
+
+}
+
+function logBroadcast(packet){
+
+let div=document.createElement("div")
+
+div.className="broadcast-msg"
+
+div.innerText=packet.type+" | "+packet.from
+
+broadcast.appendChild(div)
+
+broadcast.scrollTop=broadcast.scrollHeight
 
 }
 
@@ -196,7 +375,9 @@ function updateCount(){
 let n=0
 
 for(let id in channels){
-if(channels[id].readyState==="open") n++
+
+if(channels[id].readyState==="open")n++
+
 }
 
 count.innerText=n
@@ -220,6 +401,18 @@ let text=await navigator.clipboard.readText()
 document.getElementById(id).value=text
 
 }
+
+msg.addEventListener("keypress",e=>{
+
+if(e.key==="Enter"){
+
+e.preventDefault()
+
+sendMsg()
+
+}
+
+})
 
 </script>
 
