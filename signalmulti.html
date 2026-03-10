@@ -2,112 +2,273 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Auto P2P Chat</title>
+<title>P2P Chat WebRTC</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bittorrent-tracker@9/client.min.js"></script>
 
 <style>
 body{
 font-family:Arial;
 background:#f2f2f2;
-padding:20px;
+margin:0;
+padding:15px;
+}
+
+h2{
+text-align:center;
 }
 
 textarea{
 width:100%;
-height:200px;
+height:90px;
+margin-top:5px;
 border-radius:8px;
+padding:8px;
+}
+
+#chat{
+height:200px;
+}
+
+button{
 padding:10px;
+margin-top:5px;
+border:none;
+border-radius:8px;
+background:#2196F3;
+color:white;
+font-size:14px;
+}
+
+.row{
+display:flex;
+gap:5px;
+}
+
+.row button{
+flex:1;
+}
+
+.status{
+background:white;
+padding:8px;
+border-radius:8px;
+margin-bottom:10px;
+text-align:center;
 }
 
 input{
 width:70%;
 padding:10px;
 border-radius:8px;
+border:1px solid #ccc;
 }
 
-button{
-padding:10px;
-border:none;
-border-radius:8px;
-background:#2196F3;
-color:white;
-}
-
-.status{
-background:white;
-padding:10px;
-margin-bottom:10px;
-border-radius:8px;
+.send{
+width:28%;
 }
 </style>
 </head>
 
 <body>
 
-<h2>Auto P2P Chat</h2>
+<h2>P2P Chat</h2>
 
 <div class="status">
-Status: <b id="status">Searching peer...</b>
+Status: <b id="status">Disconnected</b>
 </div>
+
+<h3>Your Code</h3>
+
+<button onclick="generateCode()">Generate Code</button>
+<button onclick="resetConn()">Reset</button>
+
+<textarea id="myCode"></textarea>
+
+<div class="row">
+<button onclick="copyText('myCode')">Copy</button>
+<button onclick="pasteText('myCode')">Paste</button>
+</div>
+
+<h3>Partner Code</h3>
+
+<textarea id="partnerCode" placeholder="Paste partner code"></textarea>
+
+<div class="row">
+<button onclick="pasteText('partnerCode')">Paste</button>
+<button onclick="processPartner()">Connect</button>
+</div>
+
+<h3>Chat</h3>
 
 <textarea id="chat" readonly></textarea>
 
 <br><br>
 
-<input id="msg">
-<button onclick="send()">Send</button>
+<input id="msg" placeholder="Ketik pesan...">
+<button class="send" onclick="sendMsg()">Send</button>
 
 <script>
 
-let peer;
+let pc;
+let channel;
 
-const infoHash="12345678901234567890";
+function createConnection(){
 
-const client=new window.BittorrentTracker({
-infoHash:infoHash,
-peerId:crypto.randomUUID().slice(0,20),
-announce:[
-"wss://tracker.openwebtorrent.com",
-"wss://tracker.btorrent.xyz"
+pc=new RTCPeerConnection({
+iceServers:[
+{urls:"stun:stun.l.google.com:19302"}
 ]
 });
 
-client.start();
+}
 
-client.on("peer",(addr)=>{
+createConnection();
 
-status.innerText="Peer found, connecting...";
+function generateCode(){
 
-peer=new SimplePeer({
-initiator:Math.random()>0.5,
-trickle:false
+status.innerText="Generating offer...";
+
+channel=pc.createDataChannel("chat");
+
+setupChannel();
+
+pc.createOffer().then(o=>{
+pc.setLocalDescription(o);
 });
 
-peer.on("connect",()=>{
+pc.onicecandidate=e=>{
+if(!e.candidate){
+myCode.value=JSON.stringify(pc.localDescription);
+status.innerText="Offer ready";
+}
+};
+
+}
+
+function processPartner(){
+
+let data=JSON.parse(partnerCode.value);
+
+if(data.type==="offer"){
+
+status.innerText="Creating answer...";
+
+pc.setRemoteDescription(data);
+
+pc.ondatachannel=e=>{
+channel=e.channel;
+setupChannel();
+};
+
+pc.createAnswer().then(a=>{
+pc.setLocalDescription(a);
+});
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+myCode.value=JSON.stringify(pc.localDescription);
+status.innerText="Answer ready";
+}
+};
+
+}
+
+else if(data.type==="answer"){
+
+pc.setRemoteDescription(data);
+
+}
+
+}
+
+function setupChannel(){
+
+channel.onopen=()=>{
 status.innerText="Connected";
-});
+};
 
-peer.on("data",(data)=>{
-chat.value+="Peer: "+data+"\n";
+channel.onmessage=e=>{
+chat.value+="Peer: "+e.data+"\n";
 chat.scrollTop=chat.scrollHeight;
-});
+};
 
-});
+channel.onclose=()=>{
+status.innerText="Disconnected";
+};
 
-function send(){
+}
+
+function sendMsg(){
 
 let text=msg.value;
 
-if(!peer || !peer.connected) return;
+if(text==="")return;
 
-peer.send(text);
+if(channel && channel.readyState==="open"){
+
+channel.send(text);
 
 chat.value+="Me: "+text+"\n";
 
 msg.value="";
+
+chat.scrollTop=chat.scrollHeight;
+
+}
+
+}
+
+msg.addEventListener("keypress",function(e){
+
+if(e.key==="Enter"){
+
+e.preventDefault();
+
+sendMsg();
+
+}
+
+});
+
+function resetConn(){
+
+if(pc) pc.close();
+
+createConnection();
+
+status.innerText="Disconnected";
+
+myCode.value="";
+partnerCode.value="";
+chat.value="";
+
+}
+
+function copyText(id){
+
+let text=document.getElementById(id);
+
+text.select();
+
+document.execCommand("copy");
+
+alert("Copied");
+
+}
+
+async function pasteText(id){
+
+try{
+
+let text=await navigator.clipboard.readText();
+
+document.getElementById(id).value=text;
+
+}catch{
+
+alert("Paste tidak diizinkan browser");
+
+}
 
 }
 
