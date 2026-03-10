@@ -266,36 +266,41 @@ function broadcastPeerList(){
   updateNetworkUI();
 }
 
-function updateNetworkUI(){
-  netStatus.innerHTML="";
+function updateNetworkUI() {
+    netStatus.innerHTML = "";
 
-  let directPeers = [];
-  for(let id in channels){
-    if(channels[id].readyState==="open"){
-      directPeers.push(id);
+    // daftar peer langsung selain diri sendiri
+    let directPeers = [];
+    for (let id in channels) {
+        if (channels[id].readyState === "open" && id !== myUser) {
+            directPeers.push(id);
+        }
     }
-  }
 
-  if(directPeers.length){
-    let div = document.createElement("div");
-    div.innerText = `Kamu terhubung langsung dengan ${directPeers.length} user, yakni: ${directPeers.join(", ")}`;
-    netStatus.appendChild(div);
-  }
+    if (directPeers.length) {
+        let div = document.createElement("div");
+        div.innerText = `Kamu terhubung langsung dengan ${directPeers.length} user, yakni: ${directPeers.join(", ")}`;
+        netStatus.appendChild(div);
+    }
 
-  let indirectPeers = [];
-  for(let user in networkPeers){
-    networkPeers[user].forEach(p=>{
-      if(p!==myUser && !directPeers.includes(p) && !indirectPeers.includes(p)){
-        indirectPeers.push(p);
-      }
-    });
-  }
+    // peers di network tapi bukan langsung, dan bukan diri sendiri
+    let indirectPeersSet = new Set();
+    for (let user in networkPeers) {
+        if (user === myUser) continue; // jangan ikut nama sendiri
+        networkPeers[user].forEach(p => {
+            if (p !== myUser && !directPeers.includes(p)) {
+                indirectPeersSet.add(p);
+            }
+        });
+    }
 
-  if(indirectPeers.length){
-    let div = document.createElement("div");
-    div.innerText = `Sementara belum terhubung langsung ke ${indirectPeers.length} user, yakni: ${indirectPeers.join(", ")}`;
-    netStatus.appendChild(div);
-  }
+    let indirectPeers = Array.from(indirectPeersSet);
+
+    if (indirectPeers.length) {
+        let div = document.createElement("div");
+        div.innerText = `Sementara belum terhubung langsung ke ${indirectPeers.length} user, yakni: ${indirectPeers.join(", ")}`;
+        netStatus.appendChild(div);
+    }
 }
 
 function updateCount(){
