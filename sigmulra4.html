@@ -122,9 +122,12 @@ button{
 
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
+function uid(){
+  return "p"+Date.now()+Math.floor(Math.random()*10000)
+}
 const myUser="User"+uid();
 let peers={}, channels={}, seenMsgs=new Set();
-function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
+let knownPeers = {};
 
 function newPeer(id){
   let pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
@@ -147,6 +150,7 @@ function createOffer(){
     if(!e.candidate){
       let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
       myCode.value=id+"o"+s;
+      knownPeers[id] = myCode.value; // tambah ini
     }
   };
 }
@@ -176,23 +180,43 @@ function processCode(){
 function setupChannel(id){
 
   channels[id].onopen = () => {
+
     updateCount();
+
+    // kirim info peer lain
+    for(let pid in knownPeers){
+      if(pid !== id){
+        channels[id].send(JSON.stringify({
+          type:"peer",
+          code: knownPeers[pid]
+        }));
+      }
+    }
+
   };
 
   channels[id].onmessage = (e) => {
 
-    let msgObj;
+    let data;
 
     try{
-      msgObj = JSON.parse(e.data);
+      data = JSON.parse(e.data);
     }catch{
-      msgObj = {
-        id: uid(),
-        text: e.data,
-        sender: id
-      };
+      return;
     }
-    // relay ke peer lain
+
+    // jika info peer
+    if(data.type==="peer"){
+      if(!peers[data.code]){
+        partnerCode.value = data.code;
+        processCode();
+      }
+      return;
+    }
+
+    // pesan chat normal
+    let msgObj = data;
+
     broadcastMessage(msgObj, id);
 
   };
