@@ -267,18 +267,33 @@ function broadcastPeerList(){
 
 function updateNetworkUI(){
   netStatus.innerHTML="";
+
+  let directPeers = [];
   for(let id in channels){
     if(channels[id].readyState==="open"){
-      let div=document.createElement("span");
-      div.className="netItem";
-      div.innerText="🟢 "+id;
-      netStatus.appendChild(div);
+      directPeers.push(id);
     }
   }
+
+  if(directPeers.length){
+    let div = document.createElement("div");
+    div.innerText = `Kamu terhubung langsung dengan ${directPeers.length} user, yakni: ${directPeers.join(", ")}`;
+    netStatus.appendChild(div);
+  }
+
+  // peers di network tapi bukan langsung
+  let indirectPeers = [];
   for(let user in networkPeers){
-    let div=document.createElement("span");
-    div.className="netItem";
-    div.innerText="🔗 "+user+" ⇄ "+networkPeers[user].join(", ");
+    networkPeers[user].forEach(p=>{
+      if(!directPeers.includes(p) && !indirectPeers.includes(p)){
+        indirectPeers.push(p);
+      }
+    });
+  }
+
+  if(indirectPeers.length){
+    let div = document.createElement("div");
+    div.innerText = `Sementara belum terhubung langsung ke ${indirectPeers.length} user, yakni: ${indirectPeers.join(", ")}`;
     netStatus.appendChild(div);
   }
 }
