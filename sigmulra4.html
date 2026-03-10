@@ -2,10 +2,10 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Serverless Mesh Chat v2</title>
+<title>Distributed Mesh Chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
 
+<style>
 body{
 font-family:Arial;
 background:#e5ddd5;
@@ -110,13 +110,12 @@ color:white;
 padding:10px 16px;
 border-radius:20px;
 }
-
 </style>
 </head>
 
 <body>
 
-<header>Serverless Mesh Chat v2</header>
+<header>Distributed Mesh Chat</header>
 
 <div class="status">
 Peers connected : <b id="count">0</b>
@@ -156,7 +155,8 @@ function uid(){
 return "p"+Date.now()+Math.floor(Math.random()*10000)
 }
 
-const myUser="User"+uid()
+const myId=uid()
+const myUser="User"+myId.slice(-5)
 
 let peers={}
 let channels={}
@@ -179,12 +179,13 @@ setupChannel(id)
 }
 
 peers[id]=pc
+
 return pc
 }
 
 function createOffer(){
 
-let id=uid()
+let id=myId
 
 let pc=newPeer(id)
 
@@ -201,11 +202,9 @@ if(!e.candidate){
 
 let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
 
-let code=id+"o"+s
+myCode.value=id+"o"+s
 
-myCode.value=code
-
-knownPeers[id]=code
+knownPeers[id]=myCode.value
 
 }
 }
@@ -268,27 +267,11 @@ channels[id].onopen=()=>{
 
 updateCount()
 
-for(let pid in knownPeers){
-
-if(pid!==id){
-
 channels[id].send(JSON.stringify({
-type:"peer",
-code:knownPeers[pid]
+type:"hello",
+id:myId,
+user:myUser
 }))
-
-}
-
-}
-
-if(myCode.value){
-
-channels[id].send(JSON.stringify({
-type:"peer",
-code:myCode.value
-}))
-
-}
 
 }
 
@@ -302,21 +285,26 @@ data=JSON.parse(e.data)
 return
 }
 
-if(data.type==="peer"){
+if(data.type==="hello"){
 
-let pid=getId(data.code)
+knownPeers[data.id]=data
 
-if(!knownPeers[pid]){
-knownPeers[pid]=data.code
+autoConnect(data.id)
+
+return
 }
 
-if(!peers[pid]){
+if(data.type==="signal"){
 
-partnerCode.value=data.code
+if(data.target!==myId){
 
-processCode()
+relay(data)
+
+return
 
 }
+
+handleSignal(data)
 
 return
 }
@@ -336,11 +324,130 @@ updateCount()
 
 }
 
+function autoConnect(peerId){
+
+if(peerId===myId) return
+
+if(peers[peerId]) return
+
+broadcastSignal({
+
+type:"signal",
+target:peerId,
+from:myId,
+signalType:"request"
+
+})
+
+}
+
+function handleSignal(data){
+
+if(data.signalType==="request"){
+
+let pc=newPeer(data.from)
+
+let ch=pc.createDataChannel("chat")
+
+channels[data.from]=ch
+
+setupChannel(data.from)
+
+pc.createOffer().then(o=>pc.setLocalDescription(o))
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+
+let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
+
+broadcastSignal({
+
+type:"signal",
+target:data.from,
+from:myId,
+signalType:"offer",
+sdp:s
+
+})
+
+}
+}
+
+}
+
+if(data.signalType==="offer"){
+
+let pc=newPeer(data.from)
+
+let sdp=LZString.decompressFromEncodedURIComponent(data.sdp)
+
+pc.setRemoteDescription({type:"offer",sdp:sdp})
+
+pc.createAnswer().then(a=>pc.setLocalDescription(a))
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+
+let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
+
+broadcastSignal({
+
+type:"signal",
+target:data.from,
+from:myId,
+signalType:"answer",
+sdp:s
+
+})
+
+}
+}
+
+}
+
+if(data.signalType==="answer"){
+
+let pc=peers[data.from]
+
+if(!pc) return
+
+let sdp=LZString.decompressFromEncodedURIComponent(data.sdp)
+
+pc.setRemoteDescription({type:"answer",sdp:sdp})
+
+}
+
+}
+
+function broadcastSignal(obj){
+
+for(let id in channels){
+
+if(channels[id].readyState==="open"){
+
+channels[id].send(JSON.stringify(obj))
+
+}
+
+}
+
+}
+
+function relay(obj){
+
+for(let id in channels){
+
+channels[id].send(JSON.stringify(obj))
+
+}
+
+}
+
 function sendMsg(){
 
 let text=msg.value.trim()
 
-if(!text)return
+if(!text) return
 
 let msgObj={
 id:uid(),
@@ -356,7 +463,7 @@ msg.value=""
 
 function broadcastMessage(msgObj,idFrom=null){
 
-if(seenMsgs.has(msgObj.id))return
+if(seenMsgs.has(msgObj.id)) return
 
 seenMsgs.add(msgObj.id)
 
@@ -400,45 +507,6 @@ if(channels[id].readyState==="open") n++
 count.innerText=n
 
 }
-
-function gossipPeers(){
-
-for(let id in channels){
-
-if(channels[id].readyState==="open"){
-
-for(let pid in knownPeers){
-
-channels[id].send(JSON.stringify({
-type:"peer",
-code:knownPeers[pid]
-}))
-
-}
-
-}
-
-}
-
-}
-
-setInterval(()=>{
-
-gossipPeers()
-
-for(let pid in knownPeers){
-
-if(!peers[pid]){
-
-partnerCode.value=knownPeers[pid]
-
-processCode()
-
-}
-
-}
-
-},5000)
 
 function copyText(id){
 
