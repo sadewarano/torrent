@@ -2,58 +2,135 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat Tanpa Server</title>
+<title>P2P Chat WebRTC</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
 body{
 font-family:Arial;
-background:#f4f4f4;
-padding:20px;
+background:#f2f2f2;
+margin:0;
+padding:15px;
 }
+
+h2{
+text-align:center;
+}
+
 textarea{
 width:100%;
 height:80px;
 margin-top:5px;
+border-radius:8px;
+padding:8px;
 }
+
 #chat{
 height:200px;
 }
+
 button{
+padding:10px;
 margin-top:5px;
-padding:8px 12px;
+border:none;
+border-radius:8px;
+background:#2196F3;
+color:white;
+font-size:14px;
+}
+
+button:active{
+opacity:0.7;
+}
+
+.row{
+display:flex;
+gap:5px;
+}
+
+.row button{
+flex:1;
+}
+
+.status{
+background:white;
+padding:8px;
+border-radius:8px;
+margin-bottom:10px;
+text-align:center;
+}
+
+input{
+width:70%;
+padding:10px;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+.send{
+width:28%;
 }
 </style>
 </head>
+
 <body>
 
-<h2>P2P Chat Tanpa Server</h2>
+<h2>P2P Chat</h2>
 
-<b>Status:</b> <span id="status">Disconnected</span>
+<div class="status">
+Status: <b id="status">Disconnected</b>
+</div>
 
 <h3>Step 1 (User A)</h3>
+
 <button onclick="createOffer()">Create Offer</button>
+
 <textarea id="offer"></textarea>
 
+<div class="row">
+<button onclick="copyText('offer')">Copy</button>
+<button onclick="pasteText('offer')">Paste</button>
+</div>
+
 <h3>Step 2 (User B)</h3>
-Paste Offer:
-<textarea id="remoteOffer"></textarea>
+
+<textarea id="remoteOffer" placeholder="Paste Offer"></textarea>
+
+<div class="row">
+<button onclick="pasteText('remoteOffer')">Paste</button>
+</div>
+
 <button onclick="createAnswer()">Create Answer</button>
 
-Answer:
 <textarea id="answer"></textarea>
 
+<div class="row">
+<button onclick="copyText('answer')">Copy</button>
+<button onclick="pasteText('answer')">Paste</button>
+</div>
+
 <h3>Step 3 (User A)</h3>
-Paste Answer:
-<textarea id="remoteAnswer"></textarea>
+
+<textarea id="remoteAnswer" placeholder="Paste Answer"></textarea>
+
+<div class="row">
+<button onclick="pasteText('remoteAnswer')">Paste</button>
+</div>
+
 <button onclick="addAnswer()">Connect</button>
 
 <h3>Chat</h3>
-<textarea id="chat" readonly></textarea><br>
-<input id="msg" placeholder="Ketik pesan..." style="width:80%">
-<button onclick="sendMsg()">Send</button>
+
+<textarea id="chat" readonly></textarea>
+
+<br><br>
+
+<input id="msg" placeholder="Ketik pesan...">
+<button class="send" onclick="sendMsg()">Send</button>
 
 <script>
 
-let pc = new RTCPeerConnection({
+let pc=new RTCPeerConnection({
 iceServers:[
 {urls:"stun:stun.l.google.com:19302"}
 ]
@@ -63,7 +140,7 @@ let channel;
 
 function createOffer(){
 
-channel = pc.createDataChannel("chat");
+channel=pc.createDataChannel("chat");
 
 setupChannel();
 
@@ -73,8 +150,7 @@ pc.setLocalDescription(o);
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
-document.getElementById("offer").value=
-JSON.stringify(pc.localDescription);
+offer.value=JSON.stringify(pc.localDescription);
 }
 };
 
@@ -82,11 +158,9 @@ JSON.stringify(pc.localDescription);
 
 function createAnswer(){
 
-let offer=JSON.parse(
-document.getElementById("remoteOffer").value
-);
+let offerData=JSON.parse(remoteOffer.value);
 
-pc.setRemoteDescription(offer);
+pc.setRemoteDescription(offerData);
 
 pc.ondatachannel=e=>{
 channel=e.channel;
@@ -99,8 +173,7 @@ pc.setLocalDescription(a);
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
-document.getElementById("answer").value=
-JSON.stringify(pc.localDescription);
+answer.value=JSON.stringify(pc.localDescription);
 }
 };
 
@@ -108,22 +181,19 @@ JSON.stringify(pc.localDescription);
 
 function addAnswer(){
 
-let answer=JSON.parse(
-document.getElementById("remoteAnswer").value
-);
+let ans=JSON.parse(remoteAnswer.value);
 
-pc.setRemoteDescription(answer);
+pc.setRemoteDescription(ans);
 
 }
 
 function setupChannel(){
 
 channel.onopen=()=>{
-document.getElementById("status").innerText="Connected";
+status.innerText="Connected";
 };
 
 channel.onmessage=e=>{
-let chat=document.getElementById("chat");
 chat.value+="Peer: "+e.data+"\n";
 chat.scrollTop=chat.scrollHeight;
 };
@@ -132,16 +202,45 @@ chat.scrollTop=chat.scrollHeight;
 
 function sendMsg(){
 
-let input=document.getElementById("msg");
-let msg=input.value;
+let text=msg.value;
 
-channel.send(msg);
+if(text==="")return;
 
-let chat=document.getElementById("chat");
-chat.value+="Me: "+msg+"\n";
+channel.send(text);
 
-input.value="";
+chat.value+="Me: "+text+"\n";
+
+msg.value="";
+
 chat.scrollTop=chat.scrollHeight;
+
+}
+
+function copyText(id){
+
+let text=document.getElementById(id);
+
+text.select();
+
+document.execCommand("copy");
+
+alert("Copied");
+
+}
+
+async function pasteText(id){
+
+try{
+
+let text=await navigator.clipboard.readText();
+
+document.getElementById(id).value=text;
+
+}catch{
+
+alert("Paste tidak diizinkan browser");
+
+}
 
 }
 
