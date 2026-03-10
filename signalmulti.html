@@ -1,168 +1,303 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Simple-Peer Multi-Peer Mesh Manual Signaling</title>
+<meta charset="UTF-8">
+<title>P2P Chat Persist</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-  body { font-family: monospace; background:#111; color:#0f0; padding:15px; }
-  textarea, input, button { width: 100%; background:#000; color:#0f0; border:1px solid #0f0; margin:8px 0; padding:8px; box-sizing: border-box; font-family: monospace;}
-  button { cursor:pointer; }
-  pre { background:#000; padding:10px; height: 200px; overflow-y: auto; white-space: pre-wrap; }
-  .peer-section { border: 1px solid #0f0; padding: 10px; margin-bottom: 12px; }
+
+body{
+font-family:Arial;
+background:#f2f2f2;
+padding:15px;
+margin:0;
+}
+
+h2{
+text-align:center;
+}
+
+textarea{
+width:100%;
+height:80px;
+border-radius:8px;
+padding:8px;
+margin-top:5px;
+}
+
+#chat{
+height:200px;
+}
+
+button{
+padding:10px;
+margin-top:5px;
+border:none;
+border-radius:8px;
+background:#2196F3;
+color:white;
+font-size:14px;
+}
+
+.row{
+display:flex;
+gap:5px;
+}
+
+.row button{
+flex:1;
+}
+
+.status{
+background:white;
+padding:10px;
+border-radius:8px;
+text-align:center;
+margin-bottom:10px;
+}
+
+input{
+width:70%;
+padding:10px;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+.send{
+width:28%;
+}
+
+.clear{
+background:#e53935;
+}
+
 </style>
 </head>
+
 <body>
 
-<h2>🌐 Multi-Peer Mesh Manual Signaling</h2>
+<h2>P2P Chat</h2>
 
-<div><strong>ID Kamu:</strong> <span id="myId"></span></div>
-
-<div class="peer-section">
-  <strong>1️⃣ Tambah Peer</strong><br/>
-  <input type="text" id="peerIdInput" placeholder="Masukkan Peer ID lain, misal: anom1234" />
-  <button onclick="addPeer()">Tambah Peer & Jadi Initiator</button>
+<div class="status">
+Status: <b id="status">Disconnected</b>
 </div>
 
-<div class="peer-section">
-  <strong>2️⃣ Signaling untuk Peer</strong><br/>
-  <textarea id="signalInput" rows="6" placeholder="Paste signaling dari peer lain di sini"></textarea>
-  <button onclick="applySignal()">Apply Signaling dari Peer</button>
+<button class="clear" onclick="clearSession()">Clear Session</button>
+
+<h3>Create Offer</h3>
+
+<button onclick="createOffer()">Create Offer</button>
+
+<textarea id="offer"></textarea>
+
+<div class="row">
+<button onclick="copyText('offer')">Copy</button>
+<button onclick="pasteText('offer')">Paste</button>
 </div>
 
-<div class="peer-section">
-  <strong>3️⃣ Kirim Pesan ke Semua Peer</strong><br/>
-  <input type="text" id="messageInput" placeholder="Tulis pesan di sini..." />
-  <button onclick="broadcastMessage()">Kirim Pesan</button>
+<h3>Remote Offer</h3>
+
+<textarea id="remoteOffer"></textarea>
+
+<div class="row">
+<button onclick="pasteText('remoteOffer')">Paste</button>
 </div>
 
-<div>
-  <strong>📡 Log Pesan & Sistem</strong>
-  <pre id="log"></pre>
+<button onclick="createAnswer()">Create Answer</button>
+
+<textarea id="answer"></textarea>
+
+<div class="row">
+<button onclick="copyText('answer')">Copy</button>
+<button onclick="pasteText('answer')">Paste</button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
+<h3>Remote Answer</h3>
+
+<textarea id="remoteAnswer"></textarea>
+
+<div class="row">
+<button onclick="pasteText('remoteAnswer')">Paste</button>
+</div>
+
+<button onclick="connectPeer()">Connect</button>
+
+<h3>Chat</h3>
+
+<textarea id="chat" readonly></textarea>
+
+<br><br>
+
+<input id="msg" placeholder="Ketik pesan...">
+<button class="send" onclick="sendMsg()">Send</button>
+
 <script>
-  const myId = 'anom' + Math.floor(1000 + Math.random() * 9000);
-  document.getElementById('myId').textContent = myId;
 
-  const peers = {}; // { peerId: SimplePeerInstance }
-  const logEl = document.getElementById('log');
+let pc;
+let channel;
 
-  function log(msg) {
-    logEl.textContent += msg + "\n";
-    logEl.scrollTop = logEl.scrollHeight;
-  }
+function initConnection(){
 
-  // Tambah peer baru dan mulai sebagai initiator
-  function addPeer() {
-    const peerId = document.getElementById('peerIdInput').value.trim();
-    if (!peerId) return alert('Masukkan Peer ID');
+pc=new RTCPeerConnection({
+iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+});
 
-    if (peers[peerId]) {
-      alert('Sudah ada koneksi dengan ' + peerId);
-      return;
-    }
+pc.ondatachannel=e=>{
+channel=e.channel;
+setupChannel();
+};
 
-    const peer = new SimplePeer({ initiator: true, trickle: false });
-    setupPeer(peer, peerId);
+}
 
-    peers[peerId] = peer;
+initConnection();
 
-    log(`⏳ Membuat koneksi sebagai initiator ke ${peerId}`);
-  }
+function createOffer(){
 
-  // Setup event pada peer SimplePeer
-  function setupPeer(peer, peerId) {
-    peer.on('signal', data => {
-      const json = JSON.stringify({ from: myId, to: peerId, signal: data }, null, 2);
-      log(`### Signal untuk ${peerId} (salin dan kirim ke peer ini):\n${json}`);
-    });
+channel=pc.createDataChannel("chat");
 
-    peer.on('connect', () => {
-      log(`✅ Terhubung dengan ${peerId}`);
-      sendSystemMessage(peer, `Halo dari ${myId}`);
-    });
+setupChannel();
 
-    peer.on('data', data => {
-      try {
-        const msgObj = JSON.parse(data);
-        log(`👤 ${msgObj.from}: ${msgObj.text}`);
-      } catch {
-        log(`👤 Data dari ${peerId}: ${data.toString()}`);
-      }
-    });
+pc.createOffer().then(o=>{
+pc.setLocalDescription(o);
+});
 
-    peer.on('error', err => {
-      log(`❌ Error dengan ${peerId}: ${err}`);
-    });
+pc.onicecandidate=e=>{
+if(!e.candidate){
 
-    peer.on('close', () => {
-      log(`⚠️ Koneksi dengan ${peerId} ditutup`);
-      delete peers[peerId];
-    });
-  }
+offer.value=JSON.stringify(pc.localDescription);
 
-  // Apply signaling JSON yang diterima dari peer lain
-  function applySignal() {
-    const input = document.getElementById('signalInput').value.trim();
-    if (!input) return alert('Masukkan signaling JSON');
-    let obj;
-    try {
-      obj = JSON.parse(input);
-    } catch {
-      return alert('Signaling JSON tidak valid');
-    }
+localStorage.setItem("offer",offer.value);
 
-    if (!obj.from || !obj.to || !obj.signal) {
-      return alert('Format signaling salah (harus ada from, to, signal)');
-    }
+}
+};
 
-    // Jika belum ada peer, buat baru (receiver)
-    if (!peers[obj.from]) {
-      const peer = new SimplePeer({ initiator: false, trickle: false });
-      setupPeer(peer, obj.from);
-      peers[obj.from] = peer;
-      log(`⏳ Menerima koneksi dari ${obj.from} (receiver)`);
-    }
+}
 
-    peers[obj.from].signal(obj.signal);
-    log(`### Signaling diterapkan untuk koneksi ${obj.from}`);
+function createAnswer(){
 
-    document.getElementById('signalInput').value = '';
-  }
+let offerData=JSON.parse(remoteOffer.value);
 
-  // Kirim pesan ke semua peer yang terkoneksi
-  function broadcastMessage() {
-    const msg = document.getElementById('messageInput').value.trim();
-    if (!msg) return;
+pc.setRemoteDescription(offerData);
 
-    const msgObj = { from: myId, text: msg };
-    const jsonMsg = JSON.stringify(msgObj);
+pc.createAnswer().then(a=>{
+pc.setLocalDescription(a);
+});
 
-    let sentCount = 0;
-    for (const peerId in peers) {
-      const peer = peers[peerId];
-      if (peer.connected) {
-        peer.send(jsonMsg);
-        sentCount++;
-      }
-    }
+pc.onicecandidate=e=>{
+if(!e.candidate){
 
-    if (sentCount === 0) {
-      alert('Tidak ada peer terkoneksi untuk mengirim pesan');
-      return;
-    }
+answer.value=JSON.stringify(pc.localDescription);
 
-    log(`🗨️ Kamu (broadcast ke ${sentCount} peer): ${msg}`);
-    document.getElementById('messageInput').value = '';
-  }
+localStorage.setItem("answer",answer.value);
 
-  // Kirim pesan sistem (misal halo) ke satu peer
-  function sendSystemMessage(peer, text) {
-    const msgObj = { from: myId, text };
-    peer.send(JSON.stringify(msgObj));
-  }
+}
+};
+
+}
+
+function connectPeer(){
+
+let ans=JSON.parse(remoteAnswer.value);
+
+pc.setRemoteDescription(ans);
+
+localStorage.setItem("remoteAnswer",remoteAnswer.value);
+
+}
+
+function setupChannel(){
+
+channel.onopen=()=>{
+
+status.innerText="Connected";
+
+};
+
+channel.onmessage=e=>{
+
+chat.value+="Peer: "+e.data+"\n";
+
+chat.scrollTop=chat.scrollHeight;
+
+};
+
+}
+
+function sendMsg(){
+
+let text=msg.value;
+
+if(text==="")return;
+
+channel.send(text);
+
+chat.value+="Me: "+text+"\n";
+
+msg.value="";
+
+chat.scrollTop=chat.scrollHeight;
+
+}
+
+function copyText(id){
+
+let text=document.getElementById(id);
+
+text.select();
+
+document.execCommand("copy");
+
+}
+
+async function pasteText(id){
+
+try{
+
+let text=await navigator.clipboard.readText();
+
+document.getElementById(id).value=text;
+
+}catch{
+
+alert("Browser tidak mengizinkan paste");
+
+}
+
+}
+
+function clearSession(){
+
+localStorage.clear();
+
+location.reload();
+
+}
+
+function loadSaved(){
+
+if(localStorage.getItem("offer")){
+
+offer.value=localStorage.getItem("offer");
+
+}
+
+if(localStorage.getItem("answer")){
+
+answer.value=localStorage.getItem("answer");
+
+}
+
+if(localStorage.getItem("remoteAnswer")){
+
+remoteAnswer.value=localStorage.getItem("remoteAnswer");
+
+}
+
+}
+
+loadSaved();
+
 </script>
 
 </body>
