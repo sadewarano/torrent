@@ -192,7 +192,7 @@ function setupChannel(id){
         sender: id
       };
     }
-
+    // relay ke peer lain
     broadcastMessage(msgObj, id);
 
   };
@@ -222,28 +222,20 @@ function addMessage(text,isMe){
 
 function broadcastMessage(raw,idFrom=null){
 
-  let msgObj;
-
-  if(typeof raw==="string"){
-    try{
-      msgObj=JSON.parse(raw);
-    }catch{
-      msgObj={id:uid(), text:raw, sender:idFrom||"peer"};
-    }
-  }else{
-    msgObj=raw;
-  }
+  let msgObj = typeof raw==="string" ? JSON.parse(raw) : raw;
 
   if(seenMsgs.has(msgObj.id)) return;
 
   seenMsgs.add(msgObj.id);
 
+  // kirim ke peer lain
   for(let id in channels){
     if(id!==idFrom && channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
     }
   }
 
+  // tampilkan di chat
   let div=document.createElement("div");
   div.className="msg "+(msgObj.sender==="me"?"me":"peer");
 
