@@ -273,12 +273,13 @@ function broadcastPeerList(){
 }
 
 function updateNetworkUI(){
-  netStatus.innerHTML="";
+  netStatus.innerHTML = "";
 
+  // kumpulkan direct peers (langsung terhubung)
   let directPeers = [];
   for(let id in channels){
-    if(channels[id].readyState==="open"){
-      directPeers.push(peerNames[id]||id);
+    if(channels[id].readyState === "open" && id !== myUser){
+      directPeers.push(id);
     }
   }
 
@@ -288,12 +289,15 @@ function updateNetworkUI(){
     netStatus.appendChild(div);
   }
 
+  // kumpulkan indirect peers (terhubung tapi bukan langsung)
   let indirectPeers = [];
   for(let user in networkPeers){
-    networkPeers[user].forEach(p=>{
-      let name = peerNames[p] || p;
-      if(!directPeers.includes(name) && !indirectPeers.includes(name)){
-        indirectPeers.push(name);
+    // skip diri sendiri
+    if(user === myUser) continue;
+
+    networkPeers[user].forEach(p => {
+      if(p !== myUser && !directPeers.includes(p) && !indirectPeers.includes(p)){
+        indirectPeers.push(p);
       }
     });
   }
