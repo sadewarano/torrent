@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat Persist</title>
+<title>P2P Chat Room</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
@@ -10,17 +10,25 @@
 body{
 font-family:Arial;
 background:#f2f2f2;
-padding:15px;
 margin:0;
+padding:15px;
 }
 
 h2{
 text-align:center;
 }
 
+.status{
+background:white;
+padding:10px;
+border-radius:8px;
+text-align:center;
+margin-bottom:10px;
+}
+
 textarea{
 width:100%;
-height:80px;
+height:120px;
 border-radius:8px;
 padding:8px;
 margin-top:5px;
@@ -37,7 +45,6 @@ border:none;
 border-radius:8px;
 background:#2196F3;
 color:white;
-font-size:14px;
 }
 
 .row{
@@ -49,77 +56,46 @@ gap:5px;
 flex:1;
 }
 
-.status{
-background:white;
-padding:10px;
-border-radius:8px;
-text-align:center;
-margin-bottom:10px;
-}
-
 input{
-width:70%;
+width:100%;
 padding:10px;
 border-radius:8px;
 border:1px solid #ccc;
 }
 
-.send{
-width:28%;
-}
-
-.clear{
-background:#e53935;
-}
-
 </style>
+
 </head>
 
 <body>
 
-<h2>P2P Chat</h2>
+<h2>P2P Room Chat</h2>
 
 <div class="status">
 Status: <b id="status">Disconnected</b>
 </div>
 
-<button class="clear" onclick="clearSession()">Clear Session</button>
+<h3>Room Code</h3>
 
-<h3>Create Offer</h3>
-
-<button onclick="createOffer()">Create Offer</button>
-
-<textarea id="offer"></textarea>
+<input id="room" placeholder="Masukkan Room Code">
 
 <div class="row">
-<button onclick="copyText('offer')">Copy</button>
-<button onclick="pasteText('offer')">Paste</button>
+<button onclick="createRoom()">Create Room</button>
+<button onclick="joinRoom()">Join Room</button>
 </div>
 
-<h3>Remote Offer</h3>
+<h3>Your Code</h3>
 
-<textarea id="remoteOffer"></textarea>
+<textarea id="myCode"></textarea>
 
 <div class="row">
-<button onclick="pasteText('remoteOffer')">Paste</button>
+<button onclick="copyCode()">Copy</button>
+<button onclick="pasteCode()">Paste</button>
 </div>
 
-<button onclick="createAnswer()">Create Answer</button>
+<h3>Partner Code</h3>
 
-<textarea id="answer"></textarea>
-
-<div class="row">
-<button onclick="copyText('answer')">Copy</button>
-<button onclick="pasteText('answer')">Paste</button>
-</div>
-
-<h3>Remote Answer</h3>
-
-<textarea id="remoteAnswer"></textarea>
-
-<div class="row">
-<button onclick="pasteText('remoteAnswer')">Paste</button>
-</div>
+<textarea id="partnerCode"></textarea>
 
 <button onclick="connectPeer()">Connect</button>
 
@@ -130,17 +106,19 @@ Status: <b id="status">Disconnected</b>
 <br><br>
 
 <input id="msg" placeholder="Ketik pesan...">
-<button class="send" onclick="sendMsg()">Send</button>
+<button onclick="sendMsg()">Send</button>
 
 <script>
 
 let pc;
 let channel;
 
-function initConnection(){
+function init(){
 
 pc=new RTCPeerConnection({
-iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+iceServers:[
+{urls:"stun:stun.l.google.com:19302"}
+]
 });
 
 pc.ondatachannel=e=>{
@@ -150,9 +128,9 @@ setupChannel();
 
 }
 
-initConnection();
+init();
 
-function createOffer(){
+function createRoom(){
 
 channel=pc.createDataChannel("chat");
 
@@ -165,138 +143,109 @@ pc.setLocalDescription(o);
 pc.onicecandidate=e=>{
 if(!e.candidate){
 
-offer.value=JSON.stringify(pc.localDescription);
+let data={
+room:room.value,
+sdp:pc.localDescription
+}
 
-localStorage.setItem("offer",offer.value);
+myCode.value=btoa(JSON.stringify(data))
 
 }
 };
 
 }
 
-function createAnswer(){
+function joinRoom(){
 
-let offerData=JSON.parse(remoteOffer.value);
-
-pc.setRemoteDescription(offerData);
-
-pc.createAnswer().then(a=>{
-pc.setLocalDescription(a);
-});
-
-pc.onicecandidate=e=>{
-if(!e.candidate){
-
-answer.value=JSON.stringify(pc.localDescription);
-
-localStorage.setItem("answer",answer.value);
-
-}
-};
+alert("Paste kode dari host lalu klik Connect")
 
 }
 
 function connectPeer(){
 
-let ans=JSON.parse(remoteAnswer.value);
+let data=JSON.parse(atob(partnerCode.value))
 
-pc.setRemoteDescription(ans);
+if(data.sdp.type==="offer"){
 
-localStorage.setItem("remoteAnswer",remoteAnswer.value);
+pc.setRemoteDescription(data.sdp)
+
+pc.createAnswer().then(a=>{
+pc.setLocalDescription(a)
+})
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+
+let ans={
+room:room.value,
+sdp:pc.localDescription
+}
+
+myCode.value=btoa(JSON.stringify(ans))
+
+}
+}
+
+}
+
+else if(data.sdp.type==="answer"){
+
+pc.setRemoteDescription(data.sdp)
+
+}
 
 }
 
 function setupChannel(){
 
 channel.onopen=()=>{
-
-status.innerText="Connected";
-
-};
+status.innerText="Connected"
+}
 
 channel.onmessage=e=>{
-
-chat.value+="Peer: "+e.data+"\n";
-
-chat.scrollTop=chat.scrollHeight;
-
-};
+chat.value+="Peer: "+e.data+"\n"
+chat.scrollTop=chat.scrollHeight
+}
 
 }
 
 function sendMsg(){
 
-let text=msg.value;
+let text=msg.value
 
-if(text==="")return;
+if(text==="")return
 
-channel.send(text);
+channel.send(text)
 
-chat.value+="Me: "+text+"\n";
+chat.value+="Me: "+text+"\n"
 
-msg.value="";
+msg.value=""
 
-chat.scrollTop=chat.scrollHeight;
-
-}
-
-function copyText(id){
-
-let text=document.getElementById(id);
-
-text.select();
-
-document.execCommand("copy");
+chat.scrollTop=chat.scrollHeight
 
 }
 
-async function pasteText(id){
+function copyCode(){
+
+myCode.select()
+document.execCommand("copy")
+
+}
+
+async function pasteCode(){
 
 try{
 
-let text=await navigator.clipboard.readText();
-
-document.getElementById(id).value=text;
+let text=await navigator.clipboard.readText()
+partnerCode.value=text
 
 }catch{
 
-alert("Browser tidak mengizinkan paste");
+alert("Paste tidak diizinkan")
 
 }
 
 }
-
-function clearSession(){
-
-localStorage.clear();
-
-location.reload();
-
-}
-
-function loadSaved(){
-
-if(localStorage.getItem("offer")){
-
-offer.value=localStorage.getItem("offer");
-
-}
-
-if(localStorage.getItem("answer")){
-
-answer.value=localStorage.getItem("answer");
-
-}
-
-if(localStorage.getItem("remoteAnswer")){
-
-remoteAnswer.value=localStorage.getItem("remoteAnswer");
-
-}
-
-}
-
-loadSaved();
 
 </script>
 
