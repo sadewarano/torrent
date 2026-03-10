@@ -1,241 +1,237 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat Bubble UI (Light)</title>
+<title>P2P Multi Chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f4f6f8;
-  color: #222;
-  padding: 14px;
-  max-width: 720px;
-  margin: auto;
-}
-
-h3 {
-  margin-bottom: 6px;
-}
-
-#chat {
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  padding: 12px;
-  height: 360px;
-  overflow-y: auto;
-  margin: 10px 0;
-}
-
-.bubble {
-  max-width: 75%;
-  padding: 8px 12px;
-  margin: 6px 0;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.me {
-  background: #d1f7c4;
-  color: #0b3d0b;
-  margin-left: auto;
-  border-bottom-right-radius: 4px;
-}
-
-.peer {
-  background: #f0f0f0;
-  color: #222;
-  margin-right: auto;
-  border-bottom-left-radius: 4px;
-}
-
-.system {
-  background: #eef1f4;
-  color: #666;
-  font-size: 12px;
-  text-align: center;
-  margin: 8px auto;
-  border-radius: 8px;
-  max-width: 90%;
-}
-
-.name {
-  font-size: 11px;
-  color: #777;
-  margin-bottom: 2px;
-}
-
-input, button {
-  width: 100%;
-  padding: 10px;
-  margin: 6px 0;
-  border-radius: 10px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-}
-
-input {
-  background: #fff;
-}
-
-button {
-  background: #2ecc71;
-  color: #fff;
-  border: none;
-  font-weight: 600;
-}
-
-button:disabled {
-  background: #bcdcc8;
-}
+body{font-family:Arial;background:#f2f2f2;padding:15px}
+textarea{width:100%;height:90px;margin-top:5px;border-radius:8px;padding:8px}
+#chat{height:220px}
+button{padding:10px;border:none;border-radius:8px;background:#2196F3;color:white;margin-top:5px}
+.row{display:flex;gap:5px}
+.status{background:white;padding:8px;border-radius:8px;margin-bottom:10px;text-align:center}
+input{width:70%;padding:10px;border-radius:8px;border:1px solid #ccc}
+.send{width:28%}
 </style>
 </head>
 
 <body>
 
-<h3>🌐 P2P Chat</h3>
-<div><b>ID kamu:</b> <span id="id"></span></div>
+<h2>P2P Multi User Chat</h2>
 
-<div id="chat"></div>
+<div class="status">
+Peers connected: <b id="count">0</b>
+</div>
 
-<input id="msg" placeholder="Tulis pesan..." disabled>
-<button id="sendBtn" disabled>Kirim</button>
+<h3>Your Code</h3>
 
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
+<button onclick="createOffer()">Generate Offer</button>
+
+<textarea id="myCode"></textarea>
+
+<div class="row">
+<button onclick="copyText('myCode')">Copy</button>
+</div>
+
+<h3>Partner Code</h3>
+
+<textarea id="partnerCode"></textarea>
+
+<div class="row">
+<button onclick="pasteText('partnerCode')">Paste</button>
+<button onclick="processCode()">Process</button>
+</div>
+
+<h3>Chat</h3>
+
+<textarea id="chat" readonly></textarea>
+
+<br><br>
+
+<input id="msg" placeholder="message">
+<button class="send" onclick="sendMsg()">Send</button>
 
 <script>
-/* ================= ID ================= */
-const myId = "user" + Math.floor(Math.random() * 10000);
-document.getElementById("id").textContent = myId;
 
-const chat = document.getElementById("chat");
-const msgInput = document.getElementById("msg");
-const sendBtn = document.getElementById("sendBtn");
+let peers={}
+let channels={}
+let peerCounter=0
 
-/* ================= UI ================= */
-function addBubble(text, type, from = "") {
-  const wrap = document.createElement("div");
-
-  if (type === "system") {
-    wrap.className = "bubble system";
-    wrap.textContent = text;
-  } else {
-    if (type === "peer") {
-      const name = document.createElement("div");
-      name.className = "name";
-      name.textContent = from;
-      wrap.appendChild(name);
-    }
-
-    const bubble = document.createElement("div");
-    bubble.className = "bubble " + type;
-    bubble.textContent = text;
-    wrap.appendChild(bubble);
-  }
-
-  chat.appendChild(wrap);
-  chat.scrollTop = chat.scrollHeight;
+function encode(str){
+return btoa(unescape(encodeURIComponent(str)))
+.replace(/\+/g,'-')
+.replace(/\//g,'_')
+.replace(/=+$/,'')
 }
 
-/* ================= SIGNALING ================= */
-const SIGNALING_HOST = "p2p-chat-production-3693.up.railway.app";
-const WS_URL = location.protocol === "https:"
-  ? "wss://" + SIGNALING_HOST
-  : "ws://" + SIGNALING_HOST;
-
-addBubble("🔌 Menghubungkan signaling...", "system");
-
-const ws = new WebSocket(WS_URL);
-const peers = {};
-
-ws.onopen = () => {
-  addBubble("✅ Signaling terhubung", "system");
-  ws.send(JSON.stringify({ type: "register", id: myId }));
-};
-
-ws.onmessage = e => {
-  const data = JSON.parse(e.data);
-
-  if (data.type === "peers") {
-    data.peers.forEach(pid => {
-      if (pid === myId || peers[pid]) return;
-      createPeer(pid);
-    });
-    return;
-  }
-
-  if (data.signal) {
-    if (!peers[data.from]) createPeer(data.from);
-    peers[data.from].signal(data.signal);
-  }
-};
-
-/* ================= PEER ================= */
-function createPeer(pid) {
-  addBubble("⏳ Menghubungkan ke " + pid, "system");
-
-  const peer = new SimplePeer({
-    initiator: myId < pid,
-    trickle: false
-  });
-
-  peers[pid] = peer;
-
-  peer.on("signal", s => {
-    ws.send(JSON.stringify({ from: myId, to: pid, signal: s }));
-  });
-
-  peer.on("connect", () => {
-    addBubble("✅ Terhubung dengan " + pid, "system");
-    updateUI();
-  });
-
-  peer.on("data", d => {
-    addBubble(d.toString(), "peer", pid);
-  });
-
-  peer.on("close", () => {
-    addBubble("⚠️ Terputus dari " + pid, "system");
-    delete peers[pid];
-    updateUI();
-  });
-
-  peer.on("error", () => {
-    addBubble("❌ Error koneksi ke " + pid, "system");
-  });
+function decode(str){
+str=str.replace(/-/g,'+').replace(/_/g,'/')
+return decodeURIComponent(escape(atob(str)))
 }
 
-/* ================= SEND ================= */
-sendBtn.onclick = () => {
-  const text = msgInput.value.trim();
-  if (!text) return;
+function newPeer(id){
 
-  let sent = 0;
-  Object.values(peers).forEach(p => {
-    if (p.connected) {
-      p.send(text);
-      sent++;
-    }
-  });
+let pc=new RTCPeerConnection({
+iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+})
 
-  if (sent) {
-    addBubble(text, "me");
-  } else {
-    addBubble("⚠️ Tidak ada peer siap", "system");
-  }
-
-  msgInput.value = "";
-};
-
-/* ================= UI ================= */
-function updateUI() {
-  const ready = Object.values(peers).some(p => p.connected);
-  msgInput.disabled = !ready;
-  sendBtn.disabled = !ready;
+pc.ondatachannel=e=>{
+channels[id]=e.channel
+setupChannel(id)
 }
+
+peers[id]=pc
+
+return pc
+}
+
+function createOffer(){
+
+let id="p"+(++peerCounter)
+
+let pc=newPeer(id)
+
+let channel=pc.createDataChannel("chat")
+
+channels[id]=channel
+
+setupChannel(id)
+
+pc.createOffer().then(o=>{
+pc.setLocalDescription(o)
+})
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+
+let sdp=encode(pc.localDescription.sdp)
+
+myCode.value=id+"|o|"+sdp
+
+}
+}
+
+}
+
+function processCode(){
+
+let parts=partnerCode.value.split("|")
+
+let id=parts[0]
+let type=parts[1]
+let sdp=decode(parts[2])
+
+let pc=peers[id] || newPeer(id)
+
+if(type==="o"){
+
+pc.setRemoteDescription({
+type:"offer",
+sdp:sdp
+})
+
+pc.createAnswer().then(a=>{
+pc.setLocalDescription(a)
+})
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+
+let sdp2=encode(pc.localDescription.sdp)
+
+myCode.value=id+"|a|"+sdp2
+
+}
+}
+
+}
+
+else if(type==="a"){
+
+pc.setRemoteDescription({
+type:"answer",
+sdp:sdp
+})
+
+}
+
+}
+
+function setupChannel(id){
+
+channels[id].onopen=()=>{
+updateCount()
+}
+
+channels[id].onmessage=e=>{
+
+chat.value+="Peer: "+e.data+"\n"
+chat.scrollTop=chat.scrollHeight
+
+}
+
+channels[id].onclose=()=>{
+updateCount()
+}
+
+}
+
+function sendMsg(){
+
+let text=msg.value
+
+if(text==="") return
+
+for(let id in channels){
+
+let ch=channels[id]
+
+if(ch.readyState==="open"){
+ch.send(text)
+}
+
+}
+
+chat.value+="Me: "+text+"\n"
+
+msg.value=""
+
+chat.scrollTop=chat.scrollHeight
+
+}
+
+function updateCount(){
+
+let n=0
+
+for(let id in channels){
+if(channels[id].readyState==="open") n++
+}
+
+count.innerText=n
+
+}
+
+function copyText(id){
+
+let text=document.getElementById(id)
+
+text.select()
+
+document.execCommand("copy")
+
+}
+
+async function pasteText(id){
+
+let text=await navigator.clipboard.readText()
+
+document.getElementById(id).value=text
+
+}
+
 </script>
 
 </body>
