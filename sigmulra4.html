@@ -161,31 +161,29 @@ function createOffer(){
 }
 
 function processCode(){
-  let code = partnerCode.value.trim()
-  let id = getId(code)
-  let type = code[id.length]
-  let data = code.slice(id.length+1)
-  let sdp = LZString.decompressFromEncodedURIComponent(data)
-  let pc = peers[id]
-  if(!pc){
-    pc = newPeer(id)
-  }
-
-  knownPeers[id] = code
-  if(type==="o"){
-    pc.setRemoteDescription({type:"offer",sdp:sdp})
-    pc.createAnswer().then(a=>pc.setLocalDescription(a))
-    pc.onicecandidate=e=>{
-      if(!e.candidate){
-        let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
-        let answer=id+"a"+s
-        myCode.value=answer
-      }
-    }
-  }
-  else if(type==="a"){
-    pc.setRemoteDescription({type:"answer",sdp:sdp})
-  }
+let code=partnerCode.value.trim()
+let id=getId(code)
+let type=code[id.length]
+let data=code.slice(id.length+1)
+let sdp=LZString.decompressFromEncodedURIComponent(data)
+let pc=peers[id]
+if(!pc) pc=newPeer(id)
+knownPeers[id]=code
+if(type==="o"){
+pc.setRemoteDescription({type:"offer",sdp:sdp})
+pc.createAnswer().then(a=>pc.setLocalDescription(a))
+pc.onicecandidate=e=>{
+if(!e.candidate){
+let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
+let answer=id+"a"+s
+myCode.value=answer
+knownPeers[id]=answer
+}}
+}
+else if(type==="a"){
+pc.setRemoteDescription({type:"answer",sdp:sdp})
+knownPeers[id]=code
+}
 }
 
 function setupChannel(id){
@@ -301,18 +299,14 @@ setInterval(()=>{
 },5000)
 
 function gossipPeers(){
-  for(let id in channels){
-    if(channels[id].readyState==="open"){
-      for(let pid in knownPeers){
-        channels[id].send(JSON.stringify({
-          type:"peer",
-          code:knownPeers[pid]
-        }));
-      }
-    }
-  }
+for(let id in channels){
+if(channels[id].readyState==="open"){
+for(let pid in knownPeers){
+if(pid!==id){
+channels[id].send(JSON.stringify({type:"peer",code:knownPeers[pid]}))
+}}
+}}
 }
-
 
 </script>
 </body>
