@@ -122,9 +122,8 @@ button{
 
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
-
+const myUser="User"+uid();
 let peers={}, channels={}, seenMsgs=new Set();
-
 function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
 
 function newPeer(id){
@@ -159,6 +158,7 @@ function processCode(){
   let data=code.slice(id.length+1);
   let sdp=LZString.decompressFromEncodedURIComponent(data);
   let pc=peers[id] || newPeer(id);
+  
   if(type==="o"){
     pc.setRemoteDescription({type:"offer",sdp:sdp});
     pc.createAnswer().then(a=>pc.setLocalDescription(a));
@@ -204,11 +204,14 @@ function setupChannel(id){
 }
 
 function sendMsg(){
-  let text=msg.value.trim();
+  let text = msg.value.trim();
   if(!text) return;
-  let msgObj={id:uid(), text:text, sender:"me"};
-  broadcastMessage(JSON.stringify(msgObj));
-  addMessage(text,true);
+  let msgObj={
+    id:uid(),
+    text:text,
+    sender:myUser
+  };
+  broadcastMessage(msgObj);
   msg.value="";
 }
 
@@ -220,29 +223,23 @@ function addMessage(text,isMe){
   chat.scrollTop=chat.scrollHeight;
 }
 
-function broadcastMessage(raw,idFrom=null){
-
-  let msgObj = typeof raw==="string" ? JSON.parse(raw) : raw;
-
+function broadcastMessage(msgObj,idFrom=null){
   if(seenMsgs.has(msgObj.id)) return;
-
   seenMsgs.add(msgObj.id);
-
-  // kirim ke peer lain
+  // relay ke peer lain
   for(let id in channels){
     if(id!==idFrom && channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
     }
   }
-
-  // tampilkan di chat
   let div=document.createElement("div");
-  div.className="msg "+(msgObj.sender==="me"?"me":"peer");
-
-  let name = msgObj.sender==="me" ? "You" : msgObj.sender;
-
-  div.innerText=name+": "+msgObj.text;
-
+  // posisi bubble
+  if(msgObj.sender===myUser){
+    div.className="msg me";
+  }else{
+    div.className="msg peer";
+  }
+  div.innerText=msgObj.sender+" : "+msgObj.text;
   chat.appendChild(div);
   chat.scrollTop=chat.scrollHeight;
 }
