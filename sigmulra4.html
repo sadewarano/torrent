@@ -162,12 +162,14 @@ function createOffer(){
 
 function processCode(){
 let code=partnerCode.value.trim()
+if(!code)return
 let id=getId(code)
+if(id===getId(myCode.value||""))return
+if(peers[id])return
 let type=code[id.length]
 let data=code.slice(id.length+1)
 let sdp=LZString.decompressFromEncodedURIComponent(data)
-let pc=peers[id]
-if(!pc) pc=newPeer(id)
+let pc=newPeer(id)
 knownPeers[id]=code
 if(type==="o"){
 pc.setRemoteDescription({type:"offer",sdp:sdp})
@@ -182,7 +184,6 @@ knownPeers[id]=answer
 }
 else if(type==="a"){
 pc.setRemoteDescription({type:"answer",sdp:sdp})
-knownPeers[id]=code
 }
 }
 
