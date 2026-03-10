@@ -1,205 +1,229 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat Multi User (GitHub Safe)</title>
-
+<title>P2P Chat WebRTC</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body {
-  font-family: monospace;
-  background:#111;
-  color:#0f0;
-  padding:15px;
+body{
+font-family:Arial;
+background:#f2f2f2;
+margin:0;
+padding:15px;
 }
-input, button {
-  width:100%;
-  margin:6px 0;
-  background:#000;
-  color:#0f0;
-  border:1px solid #0f0;
-  padding:8px;
+
+h2{
+text-align:center;
 }
-button:disabled {
-  opacity:0.5;
+
+textarea{
+width:100%;
+height:90px;
+margin-top:5px;
+border-radius:8px;
+padding:8px;
 }
-pre {
-  background:#000;
-  padding:10px;
-  height:260px;
-  overflow:auto;
+
+#chat{
+height:200px;
+}
+
+button{
+padding:10px;
+margin-top:5px;
+border:none;
+border-radius:8px;
+background:#2196F3;
+color:white;
+font-size:14px;
+}
+
+.row{
+display:flex;
+gap:5px;
+}
+
+.row button{
+flex:1;
+}
+
+.status{
+background:white;
+padding:8px;
+border-radius:8px;
+margin-bottom:10px;
+text-align:center;
+}
+
+input{
+width:70%;
+padding:10px;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+.send{
+width:28%;
 }
 </style>
 </head>
 
 <body>
 
-<h3>🌐 P2P Chat Multi User</h3>
+<h2>P2P Chat</h2>
 
-<div><b>ID kamu:</b> <span id="id"></span></div>
+<div class="status">
+Status: <b id="status">Disconnected</b>
+</div>
 
-<input id="msg" placeholder="Tulis pesan..." disabled>
-<button id="sendBtn" onclick="send()" disabled>Kirim</button>
+<h3>Your Code</h3>
 
-<pre id="log"></pre>
+<button onclick="generateCode()">Generate Code</button>
 
-<!-- SIMPLE PEER -->
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
+<textarea id="myCode"></textarea>
+
+<div class="row">
+<button onclick="copyText('myCode')">Copy</button>
+<button onclick="pasteText('myCode')">Paste</button>
+</div>
+
+<h3>Partner Code</h3>
+
+<textarea id="partnerCode" placeholder="Paste partner code"></textarea>
+
+<div class="row">
+<button onclick="pasteText('partnerCode')">Paste</button>
+<button onclick="processPartner()">Connect</button>
+</div>
+
+<h3>Chat</h3>
+
+<textarea id="chat" readonly></textarea>
+
+<br><br>
+
+<input id="msg" placeholder="Ketik pesan...">
+<button class="send" onclick="sendMsg()">Send</button>
 
 <script>
-/* ======================
-   ID & UI
-====================== */
-const myId = "user" + Math.floor(Math.random() * 10000);
-document.getElementById("id").textContent = myId;
 
-const logEl = document.getElementById("log");
-const msgInput = document.getElementById("msg");
-const sendBtn = document.getElementById("sendBtn");
+let pc=new RTCPeerConnection({
+iceServers:[
+{urls:"stun:stun.l.google.com:19302"}
+]
+});
 
-function log(t) {
-  logEl.textContent += t + "\n";
-  logEl.scrollTop = logEl.scrollHeight;
+let channel;
+
+function generateCode(){
+
+channel=pc.createDataChannel("chat");
+
+setupChannel();
+
+pc.createOffer().then(o=>{
+pc.setLocalDescription(o);
+});
+
+pc.onicecandidate=e=>{
+if(!e.candidate){
+myCode.value=JSON.stringify(pc.localDescription);
 }
-
-/* ======================
-   AUTO WS / WSS (GITHUB SAFE)
-====================== */
-const SIGNALING_HOST = "p2p-chat-production-3693.up.railway.app";
-
-const WS_URL =
-  location.protocol === "https:"
-    ? "wss://" + SIGNALING_HOST
-    : "ws://" + SIGNALING_HOST;
-
-log("🔌 Connecting to " + WS_URL);
-
-const ws = new WebSocket(WS_URL);
-
-/* ======================
-   PEERS
-====================== */
-const peers = {}; // peerId -> SimplePeer
-
-ws.onopen = () => {
-  log("✅ CONNECTED signaling");
-  ws.send(JSON.stringify({
-    type: "register",
-    id: myId
-  }));
 };
 
-ws.onmessage = e => {
-  const data = JSON.parse(e.data);
+}
 
-  // daftar peer
-  if (data.type === "peers") {
-    data.peers.forEach(pid => {
-      if (pid === myId || peers[pid]) return;
+function processPartner(){
 
-      const initiator = myId < pid;
-      log("⏳ Membuat peer ke " + pid);
+let data=JSON.parse(partnerCode.value);
 
-      const peer = new SimplePeer({
-        initiator,
-        trickle: false
-      });
+if(data.type==="offer"){
 
-      setupPeer(peer, pid);
-      peers[pid] = peer;
-    });
-    return;
-  }
+pc.setRemoteDescription(data);
 
-  // signaling
-  if (data.signal) {
-    if (!peers[data.from]) {
-      const initiator = myId < data.from;
-      log("⏳ Peer auto dibuat dari " + data.from);
-
-      const peer = new SimplePeer({
-        initiator,
-        trickle: false
-      });
-
-      setupPeer(peer, data.from);
-      peers[data.from] = peer;
-    }
-
-    try {
-      peers[data.from].signal(data.signal);
-    } catch (err) {
-      log("❌ Signal error dari " + data.from);
-    }
-  }
+pc.ondatachannel=e=>{
+channel=e.channel;
+setupChannel();
 };
 
-/* ======================
-   PEER HANDLER
-====================== */
-function setupPeer(peer, pid) {
+pc.createAnswer().then(a=>{
+pc.setLocalDescription(a);
+});
 
-  peer.on("signal", s => {
-    ws.send(JSON.stringify({
-      from: myId,
-      to: pid,
-      signal: s
-    }));
-  });
+pc.onicecandidate=e=>{
+if(!e.candidate){
+myCode.value=JSON.stringify(pc.localDescription);
+}
+};
 
-  peer.on("connect", () => {
-    log("✅ CONNECTED: " + pid);
-    updateUI();
-  });
-
-  peer.on("data", d => {
-    log(pid + ": " + d.toString());
-  });
-
-  peer.on("close", () => {
-    log("⚠️ DISCONNECTED: " + pid);
-    delete peers[pid];
-    updateUI();
-  });
-
-  peer.on("error", err => {
-    log("❌ ERROR (" + pid + "): " + err.message);
-  });
 }
 
-/* ======================
-   SEND MESSAGE
-====================== */
-function send() {
-  const text = msgInput.value.trim();
-  if (!text) return;
+else if(data.type==="answer"){
 
-  let sent = 0;
-  Object.values(peers).forEach(p => {
-    if (p.connected) {
-      p.send(text);
-      sent++;
-    }
-  });
+pc.setRemoteDescription(data);
 
-  if (sent > 0) {
-    log("Kamu: " + text);
-  } else {
-    log("⚠️ Tidak ada peer siap");
-  }
-
-  msgInput.value = "";
 }
 
-/* ======================
-   UI STATE
-====================== */
-function updateUI() {
-  const ready = Object.values(peers).some(p => p.connected);
-  msgInput.disabled = !ready;
-  sendBtn.disabled = !ready;
 }
+
+function setupChannel(){
+
+channel.onopen=()=>{
+status.innerText="Connected";
+};
+
+channel.onmessage=e=>{
+chat.value+="Peer: "+e.data+"\n";
+chat.scrollTop=chat.scrollHeight;
+};
+
+}
+
+function sendMsg(){
+
+let text=msg.value;
+
+if(text==="")return;
+
+channel.send(text);
+
+chat.value+="Me: "+text+"\n";
+
+msg.value="";
+
+chat.scrollTop=chat.scrollHeight;
+
+}
+
+function copyText(id){
+
+let text=document.getElementById(id);
+
+text.select();
+
+document.execCommand("copy");
+
+alert("Copied");
+
+}
+
+async function pasteText(id){
+
+try{
+
+let text=await navigator.clipboard.readText();
+
+document.getElementById(id).value=text;
+
+}catch{
+
+alert("Paste tidak diizinkan browser");
+
+}
+
+}
+
 </script>
 
 </body>
