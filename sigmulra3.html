@@ -4,144 +4,115 @@
 <meta charset="UTF-8">
 <title>P2P Multi Chat Broadcast</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body{
-font-family:Arial;
-background:#e5ddd5;
-margin:0;
-display:flex;
-flex-direction:column;
-height:100vh;
+  font-family:Arial;
+  background:#e5ddd5;
+  margin:0;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
 }
-
 header{
-background:#075E54;
-color:white;
-padding:12px;
-text-align:center;
-font-weight:bold;
+  background:#075E54;
+  color:white;
+  padding:12px;
+  text-align:center;
+  font-weight:bold;
 }
-
 .status{
-background:white;
-padding:8px;
-text-align:center;
-font-size:14px;
-border-bottom:1px solid #ddd;
+  background:white;
+  padding:8px;
+  text-align:center;
+  font-size:14px;
+  border-bottom:1px solid #ddd;
 }
-
 .controls{
-background:white;
-padding:10px;
-border-bottom:1px solid #ddd;
+  background:white;
+  padding:10px;
+  border-bottom:1px solid #ddd;
 }
-
 textarea{
-width:100%;
-height:70px;
-border-radius:6px;
-border:1px solid #ccc;
-padding:6px;
-margin-top:5px;
+  width:100%;
+  height:70px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  padding:6px;
+  margin-top:5px;
 }
-
 button{
-background:#128C7E;
-color:white;
-border:none;
-padding:8px 12px;
-border-radius:6px;
-margin-top:5px;
+  background:#128C7E;
+  color:white;
+  border:none;
+  padding:8px 12px;
+  border-radius:6px;
+  margin-top:5px;
 }
-
 .row{
-display:flex;
-gap:5px;
+  display:flex;
+  gap:5px;
 }
-
-.chat,.broadcast{
-flex:1;
-overflow-y:auto;
-padding:10px;
-display:flex;
-flex-direction:column;
-gap:8px;
-border-top:1px solid #ddd;
-background:#f9f9f9;
+.chat, .broadcast{
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  border-top:1px solid #ddd;
+  background:#f9f9f9;
 }
-
 .msg{
-max-width:70%;
-padding:8px 10px;
-border-radius:10px;
-font-size:14px;
-word-wrap:break-word;
+  max-width:70%;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:14px;
+  word-wrap:break-word;
 }
-
-.me{
-align-self:flex-end;
-background:#dcf8c6;
-}
-
-.peer{
-align-self:flex-start;
-background:white;
-}
-
+.me{align-self:flex-end;background:#dcf8c6;}
+.peer{align-self:flex-start;background:white;}
 .broadcast-msg{
-padding:6px 10px;
-background:#fff3cd;
-border-left:4px solid #ffc107;
-border-radius:6px;
-font-size:13px;
+  padding:6px 10px;
+  background:#fff3cd;
+  border-left:4px solid #ffc107;
+  border-radius:6px;
+  font-size:13px;
 }
-
 .inputBar{
-display:flex;
-background:white;
-padding:8px;
-gap:5px;
-border-top:1px solid #ddd;
+  display:flex;
+  background:white;
+  padding:8px;
+  gap:5px;
+  border-top:1px solid #ddd;
 }
-
 .inputBar input{
-flex:1;
-padding:10px;
-border-radius:20px;
-border:1px solid #ccc;
+  flex:1;
+  padding:10px;
+  border-radius:20px;
+  border:1px solid #ccc;
 }
-
 .send{
-background:#128C7E;
-border:none;
-color:white;
-padding:10px 16px;
-border-radius:20px;
+  background:#128C7E;
+  border:none;
+  color:white;
+  padding:10px 16px;
+  border-radius:20px;
 }
 </style>
 </head>
-
 <body>
 
 <header>P2P Multi Chat Broadcast</header>
 
-<div class="status">
-User: <b id="myName"></b> |
-Peers connected: <b id="count">0</b>
-</div>
+<div class="status">Peers connected: <b id="count">0</b></div>
 
 <div class="controls">
 <button onclick="createOffer()">Generate Offer</button>
-
 <textarea id="myCode" placeholder="Your code"></textarea>
-
 <div class="row">
 <button onclick="copyText('myCode')">Copy</button>
 </div>
-
 <textarea id="partnerCode" placeholder="Partner code"></textarea>
-
 <div class="row">
 <button onclick="pasteText('partnerCode')">Paste</button>
 <button onclick="processCode()">Connect</button>
@@ -158,302 +129,132 @@ Peers connected: <b id="count">0</b>
 <div id="broadcast" class="broadcast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
-
 <script>
 
-let peers={}
-let channels={}
-let seenMsgs=new Set()
+let peers={}, channels={}, seenMsgs=new Set();
 
-/* USERNAME PERSISTENT */
-
-function randomUser(){
-let chars="abcdefghijklmnopqrstuvwxyz0123456789"
-let name="u"
-for(let i=0;i<6;i++){
-name+=chars[Math.floor(Math.random()chars.length)]
-}
-return name
-}
-
-let username=localStorage.getItem("p2pUser")
-
-if(!username){
-username=randomUser()
-localStorage.setItem("p2pUser",username)
-}
-
-document.getElementById("myName").innerText=username
-
-
-/ ID GENERATOR */
-
-function uid(){
-return "m"+Date.now()+Math.floor(Math.random()*10000)
-}
-
-function pid(){
-return "p"+Date.now()+Math.floor(Math.random()10000)
-}
-
-
-/ WEBRTC PEER /
+function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
 
 function newPeer(id){
-
-let pc=new RTCPeerConnection({
-iceServers:[{urls:"stun:stun.l.google.com:19302"}]
-})
-
-pc.ondatachannel=e=>{
-channels[id]=e.channel
-setupChannel(id)
+  let pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+  pc.ondatachannel=e=>{
+    channels[id]=e.channel;
+    setupChannel(id);
+  };
+  peers[id]=pc;
+  return pc;
 }
-
-peers[id]=pc
-
-return pc
-}
-
-
-/ CREATE OFFER /
 
 function createOffer(){
-
-let id=pid()
-
-let pc=newPeer(id)
-
-let ch=pc.createDataChannel("chat")
-channels[id]=ch
-
-setupChannel(id)
-
-pc.createOffer().then(o=>pc.setLocalDescription(o))
-
-pc.onicecandidate=e=>{
-if(!e.candidate){
-
-let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
-
-myCode.value=id+"o"+s
-
+  let id=uid();
+  let pc=newPeer(id);
+  let ch=pc.createDataChannel("chat");
+  channels[id]=ch;
+  setupChannel(id);
+  pc.createOffer().then(o=>pc.setLocalDescription(o));
+  pc.onicecandidate=e=>{
+    if(!e.candidate){
+      let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
+      myCode.value=id+"o"+s;
+    }
+  };
 }
-}
-
-}
-
-
-/ PROCESS CODE /
 
 function processCode(){
-
-let code=partnerCode.value.trim()
-
-let id=code.match(/^p\d+/)[0]
-
-let type=code[id.length]
-
-let data=code.slice(id.length+1)
-
-let sdp=LZString.decompressFromEncodedURIComponent(data)
-
-let pc=peers[id] || newPeer(id)
-
-if(type==="o"){
-
-pc.setRemoteDescription({type:"offer",sdp:sdp})
-
-pc.createAnswer().then(a=>pc.setLocalDescription(a))
-
-pc.onicecandidate=e=>{
-if(!e.candidate){
-
-let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
-
-myCode.value=id+"a"+s
-
+  let code=partnerCode.value.trim();
+  let id=code.match(/^p\d+/)[0];
+  let type=code[id.length];
+  let data=code.slice(id.length+1);
+  let sdp=LZString.decompressFromEncodedURIComponent(data);
+  let pc=peers[id] || newPeer(id);
+  if(type==="o"){
+    pc.setRemoteDescription({type:"offer",sdp:sdp});
+    pc.createAnswer().then(a=>pc.setLocalDescription(a));
+    pc.onicecandidate=e=>{
+      if(!e.candidate){
+        let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
+        myCode.value=id+"a"+s;
+      }
+    };
+  } else if(type==="a"){
+    pc.setRemoteDescription({type:"answer",sdp:sdp});
+  }
 }
-}
-
-}
-
-else if(type==="a"){
-
-pc.setRemoteDescription({type:"answer",sdp:sdp})
-
-}
-
-}
-
-
-/ CHANNEL SETUP /
 
 function setupChannel(id){
+  channels[id].onopen=updateCount;
+  channels[id].onmessage=e=>{
 
-channels[id].onopen=updateCount
+    let msgObj;
 
-channels[id].onmessage=e=>receiveMessage(e.data,id)
+    try{
+      msgObj=JSON.parse(e.data);
+    }catch{
+      msgObj={id:uid(), text:e.data, sender:id};
+    }
 
-channels[id].onclose=updateCount
+    broadcastMessage(msgObj, id);
+    addMessage(msgObj.text,false);
 
+  };
+  channels[id].onclose=updateCount;
 }
-
-
-/ SEND MESSAGE /
 
 function sendMsg(){
-
-let text=msg.value.trim()
-
-if(!text) return
-
-let message={
-id:uid(),
-user:username,
-text:text,
-time:Date.now()
+  let text=msg.value.trim();
+  if(!text) return;
+  let msgObj={id:uid(), text:text, sender:"me"};
+  broadcastMessage(JSON.stringify(msgObj));
+  addMessage(text,true);
+  msg.value="";
 }
 
-let raw=JSON.stringify(message)
-
-seenMsgs.add(message.id)
-
-relay(raw)
-
-addChat(message,true)
-addBroadcast(message)
-
-msg.value=""
-
+function addMessage(text,isMe){
+  let div=document.createElement("div");
+  div.className="msg "+(isMe?"me":"peer");
+  div.innerText=text;
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
 }
 
+function broadcastMessage(raw,idFrom=null){
 
-/ RECEIVE MESSAGE /
+  let msgObj = typeof raw==="string" ? JSON.parse(raw) : raw;
 
-function receiveMessage(raw,from){
+  if(seenMsgs.has(msgObj.id)) return;
 
-let msgObj
+  seenMsgs.add(msgObj.id);
 
-try{
-msgObj=JSON.parse(raw)
-}catch{
-return
+  for(let id in channels){
+    if(id!==idFrom && channels[id].readyState==="open"){
+      channels[id].send(JSON.stringify(msgObj));
+    }
+  }
+
+  let div=document.createElement("div");
+  div.className="broadcast-msg";
+
+  let name = msgObj.sender==="me" ? "You" : msgObj.sender;
+
+  div.innerText=name+": "+msgObj.text;
+
+  broadcast.appendChild(div);
+  broadcast.scrollTop=broadcast.scrollHeight;
 }
-
-if(seenMsgs.has(msgObj.id)) return
-
-seenMsgs.add(msgObj.id)
-
-addChat(msgObj,false)
-addBroadcast(msgObj)
-
-relay(raw,from)
-
-}
-
-
-/ RELAY /
-
-function relay(raw,except=null){
-
-for(let id in channels){
-
-let ch=channels[id]
-
-if(ch.readyState==="open" && id!==except){
-
-ch.send(raw)
-
-}
-
-}
-
-}
-
-
-/ UI CHAT /
-
-function addChat(msg,isMe){
-
-let div=document.createElement("div")
-
-div.className="msg "+(isMe?"me":"peer")
-
-div.innerText=isMe ? msg.text : msg.user+": "+msg.text
-
-chat.appendChild(div)
-
-chat.scrollTop=chat.scrollHeight
-
-}
-
-
-/ UI BROADCAST /
-
-function addBroadcast(msg){
-
-let div=document.createElement("div")
-
-div.className="broadcast-msg"
-
-div.innerText=msg.user+": "+msg.text
-
-broadcast.appendChild(div)
-
-broadcast.scrollTop=broadcast.scrollHeight
-
-}
-
-
-/ PEER COUNT /
 
 function updateCount(){
-
-let n=0
-
-for(let id in channels){
-if(channels[id].readyState==="open") n++
+  let n=0;
+  for(let id in channels) if(channels[id].readyState==="open") n++;
+  count.innerText=n;
 }
 
-count.innerText=n
+function copyText(id){let t=document.getElementById(id); t.select(); document.execCommand("copy");}
+async function pasteText(id){let text=await navigator.clipboard.readText(); document.getElementById(id).value=text;}
 
-}
-
-
-/ COPY PASTE /
-
-function copyText(id){
-
-let t=document.getElementById(id)
-
-t.select()
-
-document.execCommand("copy")
-
-}
-
-async function pasteText(id){
-
-let text=await navigator.clipboard.readText()
-
-document.getElementById(id).value=text
-
-}
-
-
-/ ENTER SEND */
-
-msg.addEventListener("keypress",function(e){
-
-if(e.key==="Enter"){
-e.preventDefault()
-sendMsg()
-}
-
-})
+msg.addEventListener("keypress",e=>{
+  if(e.key==="Enter"){e.preventDefault(); sendMsg();}
+});
 
 </script>
-
 </body>
 </html>
