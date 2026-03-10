@@ -163,6 +163,7 @@ function createOffer(){
 function processCode(){
   let code=partnerCode.value.trim()
   let id=getId(code)
+  if(peers[id]) return   // <- tambahkan ini
   knownPeers[id]=code
   let type=code[id.length]
   let data=code.slice(id.length+1)
@@ -186,71 +187,51 @@ function processCode(){
 }
 
 function setupChannel(id){
-
   channels[id].onopen = () => {
-
-    updateCount();
-
-    // kirim info peer lain
+    updateCount()
     // kirim semua peer yang diketahui
-for(let pid in knownPeers){
-  if(pid !== id){
-    channels[id].send(JSON.stringify({
-      type:"peer",
-      code: knownPeers[pid]
-    }));
+    for(let pid in knownPeers){
+      if(pid !== id){
+        channels[id].send(JSON.stringify({
+          type:"peer",
+          code: knownPeers[pid]
+        }))
+      }
+    }
+    // kirim code diri sendiri
+    if(myCode.value){
+      channels[id].send(JSON.stringify({
+        type:"peer",
+        code: myCode.value
+      }))
+    }
   }
-}
-
-// kirim code diri sendiri juga
-if(myCode.value){
-  channels[id].send(JSON.stringify({
-    type:"peer",
-    code: myCode.value
-  }));
-}
-
-  };
 
   channels[id].onmessage = (e) => {
-
-    let data;
-
+    let data
     try{
-      data = JSON.parse(e.data);
+      data = JSON.parse(e.data)
     }catch{
-      return;
+      return
     }
-
-    // jika info peer
     if(data.type==="peer"){
-
-  let pid=getId(data.code)
-
-  if(!peers[pid] && !knownPeers[pid]){
-
-    knownPeers[pid]=data.code
-
-    partnerCode.value=data.code
-
-    processCode()
-
+      let pid = getId(data.code)
+      if(!knownPeers[pid]){
+        knownPeers[pid] = data.code
+      }
+      if(!peers[pid]){
+        partnerCode.value = data.code
+        processCode()
+      }
+      return
+    }
+    broadcastMessage(data,id)
   }
-
-  return
-}
-
-    // pesan chat normal
-    let msgObj = data;
-
-    broadcastMessage(msgObj, id);
-
-  };
-
   channels[id].onclose = () => {
-    updateCount();
-  };
-
+    delete peers[id]
+    delete channels[id]
+    updateCount()
+  }
 }
 
 function sendMsg(){
@@ -306,6 +287,30 @@ async function pasteText(id){let text=await navigator.clipboard.readText(); docu
 msg.addEventListener("keypress",e=>{
   if(e.key==="Enter"){e.preventDefault(); sendMsg();}
 });
+setInterval(()=>{
+  gossipPeers()
+  // reconnect peer yang belum tersambung
+  for(let pid in knownPeers){
+    if(!peers[pid]){
+      partnerCode.value = knownPeers[pid]
+      processCode()
+    }
+  }
+},5000)
+
+function gossipPeers(){
+  for(let id in channels){
+    if(channels[id].readyState==="open"){
+      for(let pid in knownPeers){
+        channels[id].send(JSON.stringify({
+          type:"peer",
+          code:knownPeers[pid]
+        }));
+      }
+    }
+  }
+}
+
 
 </script>
 </body>
