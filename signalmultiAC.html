@@ -1,153 +1,115 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Simple-Peer Manual Signaling (Auto Initiator)</title>
+<meta charset="UTF-8">
+<title>P2P Chat + WebTorrent Auto-Rejoin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
-  body { font-family: monospace; background:#111; color:#0f0; padding:15px; }
-  textarea, input, button {
-    width:100%; background:#000; color:#0f0;
-    border:1px solid #0f0; margin:8px 0; padding:8px;
-    box-sizing:border-box; font-family: monospace;
-  }
-  button { cursor:pointer; }
-  pre {
-    background:#000; padding:10px; height:200px;
-    overflow-y:auto; white-space:pre-wrap;
-  }
-  .peer-section {
-    border:1px solid #0f0; padding:10px; margin-bottom:12px;
-  }
-  .row {
-    display:flex; gap:6px;
-  }
+body{font-family:sans-serif;padding:10px;max-width:600px;margin:auto;}
+textarea{width:100%;height:60px;margin:4px 0;border-radius:6px;padding:6px;}
+button{padding:8px 12px;margin:4px;border-radius:6px;}
+#chat{border:1px solid #ccc;padding:8px;height:200px;overflow:auto;}
+.msg{margin:4px 0;}
+.me{color:green;}
+.peer{color:blue;}
 </style>
 </head>
 <body>
 
-<h2>🌐 Manual Signaling (Auto Initiator)</h2>
+<h2>Chat P2P via WebTorrent (Auto-Rejoin)</h2>
 
-<div><strong>ID Kamu:</strong> <span id="myId"></span></div>
+<div id="chat"></div>
 
-<div class="peer-section">
-  <strong>1️⃣ Buat Offer</strong><br/>
-  <button onclick="createOffer()">Buat Offer (Initiator)</button>
-</div>
+<textarea id="msg" placeholder="Type message..."></textarea>
+<button onclick="sendMsg()">Send</button>
 
-<div class="peer-section">
-  <strong>2️⃣ Signaling</strong><br/>
-  <textarea id="signalBox" rows="6" placeholder="Offer / Answer akan muncul di sini atau paste dari peer"></textarea>
-  <div class="row">
-    <button onclick="applySignal()">Apply Signaling</button>
-    <button onclick="copySignal()">Copy</button>
-  </div>
-</div>
+<hr>
 
-<div class="peer-section">
-  <strong>3️⃣ Kirim Pesan (Broadcast)</strong><br/>
-  <input id="messageInput" placeholder="Tulis pesan di sini..." />
-  <button onclick="broadcastMessage()">Kirim Pesan</button>
-</div>
+<label>Magnet / Torrent terbaru:</label>
+<input type="text" id="magnet" placeholder="Paste magnet / BTIH" style="width:100%;">
+<button onclick="downloadTorrent()">Download Latest</button>
 
-<div class="peer-section">
-  <strong>📡 Log Sistem</strong><br/>
-  <pre id="log"></pre>
-  <button onclick="copyLog()">Copy Log</button>
-</div>
+<div id="info"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
 <script>
-const myId = 'anom' + Math.floor(1000 + Math.random() * 9000);
-document.getElementById('myId').textContent = myId;
+const client = new WebTorrent();
+let chatLog = [];
+let currentTorrent = null;
 
-let peer = null;
-const peers = {};
-const logEl = document.getElementById('log');
-const signalBox = document.getElementById('signalBox');
-
-function log(msg){
-  logEl.textContent += msg + "\n";
-  logEl.scrollTop = logEl.scrollHeight;
+// ================== LOAD LOCAL STORAGE ==================
+if(localStorage.getItem("chatLog")){
+    chatLog = JSON.parse(localStorage.getItem("chatLog"));
+    renderChat();
 }
 
-// 1️⃣ Auto initiator
-function createOffer(){
-  if(peer) return alert("Peer sudah dibuat");
-
-  peer = new SimplePeer({ initiator:true, trickle:false });
-  setupPeer(peer, "remote");
-  peers["remote"] = peer;
-
-  log("⏳ Membuat offer...");
+// ================== SEND MESSAGE ==================
+function sendMsg(){
+    const textarea = document.getElementById("msg");
+    const text = textarea.value.trim();
+    if(!text) return;
+    const msgObj = {id:Date.now(), text:text, sender:"Me"};
+    chatLog.push(msgObj);
+    localStorage.setItem("chatLog", JSON.stringify(chatLog));
+    renderChat();
+    textarea.value = "";
+    createTorrent();
 }
 
-function setupPeer(p, peerId){
-  p.on('signal', data=>{
-    const json = JSON.stringify({ from:myId, signal:data }, null, 2);
-    signalBox.value = json;
-    log("📤 Signal siap dikirim");
-  });
+// ================== RENDER CHAT ==================
+function renderChat(){
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+    chatLog.forEach(m=>{
+        const div = document.createElement("div");
+        div.className = "msg " + (m.sender==="Me"?"me":"peer");
+        div.innerText = m.sender + ": " + m.text;
+        chat.appendChild(div);
+    });
+    chat.scrollTop = chat.scrollHeight;
+}
 
-  p.on('connect', ()=>{
-    log("✅ Peer terhubung");
-    sendSystemMessage(p, "Halo dari " + myId);
-  });
-
-  p.on('data', data=>{
-    try {
-      const m = JSON.parse(data);
-      log(`👤 ${m.from}: ${m.text}`);
-    } catch {
-      log("👤 Data: " + data);
+// ================== CREATE TORRENT ==================
+function createTorrent(){
+    if(currentTorrent){
+        currentTorrent.destroy();
+        currentTorrent = null;
     }
-  });
 
-  p.on('error', err=>log("❌ Error: " + err));
-  p.on('close', ()=>log("⚠️ Peer disconnect"));
+    const blob = new Blob([JSON.stringify(chatLog, null, 2)], {type:"application/json"});
+    client.seed(blob, torrent=>{
+        currentTorrent = torrent;
+        document.getElementById("magnet").value = torrent.magnetURI;
+        document.getElementById("info").innerText = "✅ Torrent updated! Magnet ready.";
+    });
 }
 
-// 2️⃣ Apply signaling
-function applySignal(){
-  let obj;
-  try { obj = JSON.parse(signalBox.value); }
-  catch { return alert("JSON tidak valid"); }
+// ================== DOWNLOAD TORRENT ==================
+function downloadTorrent(){
+    const magnet = document.getElementById("magnet").value.trim();
+    if(!magnet) return alert("Masukkan magnet");
 
-  if(!peer){
-    peer = new SimplePeer({ initiator:false, trickle:false });
-    setupPeer(peer, obj.from || "remote");
-  }
-
-  peer.signal(obj.signal);
-  log("📥 Signaling diterapkan");
-  signalBox.value = "";
+    client.add(magnet, torrent=>{
+        currentTorrent = torrent;
+        document.getElementById("info").innerText = "⬇️ Downloading chat log...";
+        torrent.files[0].getBlob((err, blob)=>{
+            if(err) return alert("Gagal ambil file");
+            const reader = new FileReader();
+            reader.onload = e=>{
+                try{
+                    chatLog = JSON.parse(e.target.result);
+                    localStorage.setItem("chatLog", JSON.stringify(chatLog));
+                    renderChat();
+                    document.getElementById("info").innerText = "✅ Chat log updated from torrent";
+                }catch(err){
+                    alert("JSON error: "+err);
+                }
+            };
+            reader.readAsText(blob);
+        });
+    });
 }
 
-// 3️⃣ Broadcast
-function broadcastMessage(){
-  const msg = messageInput.value.trim();
-  if(!msg || !peer || !peer.connected) return;
-
-  peer.send(JSON.stringify({ from:myId, text:msg }));
-  log("🗨️ Kamu: " + msg);
-  messageInput.value = "";
-}
-
-// Utils
-function sendSystemMessage(p, text){
-  p.send(JSON.stringify({ from:myId, text }));
-}
-
-function copySignal(){
-  navigator.clipboard.writeText(signalBox.value);
-  alert("Signaling disalin");
-}
-
-function copyLog(){
-  navigator.clipboard.writeText(logEl.textContent);
-  alert("Log disalin");
-}
 </script>
-
 </body>
 </html>
