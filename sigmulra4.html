@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat Broadcast - Optimized Broadcast</title>
+<title>P2P Multi Chat Broadcast - Ultra Fast</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
 body{
@@ -98,26 +98,11 @@ button{
   padding:10px 16px;
   border-radius:20px;
 }
-.netStatus{
-  font-size:12px;
-  background:#fff;
-  padding:6px 10px;
-  border-top:1px solid #ddd;
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-}
-.netItem{
-  background:#f2f2f2;
-  padding:3px 7px;
-  border-radius:10px;
-  font-family:monospace;
-}
 </style>
 </head>
 <body>
 
-<header>P2P Multi Chat Broadcast - Optimized Broadcast</header>
+<header>P2P Multi Chat Broadcast - Ultra Fast</header>
 
 <div class="status">
 Peers connected: <b id="count">0</b>
@@ -139,12 +124,10 @@ Peers connected: <b id="count">0</b>
   <button class="send" onclick="sendMsg()">Send</button>
 </div>
 
-<div id="netStatus" class="netStatus"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
 const myUser="User"+uid();
-let peers={}, channels={}, seenMsgs=new Set(), networkPeers={};
+let peers={}, channels={}, seenMsgs=new Set();
 
 function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
 
@@ -198,25 +181,14 @@ function processCode(){
 function setupChannel(id){
   channels[id].onopen=()=>{
     updateCount();
-    broadcastPeerList();
   };
   channels[id].onmessage=(e)=>{
     let msgObj;
     try{ msgObj=JSON.parse(e.data); }catch{ msgObj={id:uid(), text:e.data, sender:id}; }
-
-    if(msgObj.type==="peerlist"){
-      networkPeers[msgObj.user]=msgObj.peersList;
-      updateNetworkUI();
-      return;
-    }
-
-    // Optimized: langsung broadcast ke semua peers terbuka
     broadcastMessage(msgObj,id);
   };
   channels[id].onclose=()=>{
     updateCount();
-    delete networkPeers[id];
-    updateNetworkUI();
   };
 }
 
@@ -224,14 +196,11 @@ function sendMsg(){
   let text=msg.value.trim();
   if(!text) return;
   let msgObj={id:uid(), text:text, sender:myUser};
-
-  // Optimized broadcast: langsung ke semua peer terbuka
   for(let id in channels){
     if(channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
     }
   }
-
   addMessage(msgObj);
   seenMsgs.add(msgObj.id);
   msg.value=""; msg.focus();
@@ -240,13 +209,11 @@ function sendMsg(){
 function broadcastMessage(msgObj,idFrom){
   if(seenMsgs.has(msgObj.id)) return;
   seenMsgs.add(msgObj.id);
-
   for(let id in channels){
     if(id!==idFrom && channels[id].readyState==="open"){
       channels[id].send(JSON.stringify(msgObj));
     }
   }
-
   addMessage(msgObj);
 }
 
@@ -256,51 +223,6 @@ function addMessage(msgObj){
   div.innerText=msgObj.sender+" : "+msgObj.text;
   chat.appendChild(div);
   chat.scrollTop=chat.scrollHeight;
-}
-
-function broadcastPeerList(){
-  let msg={type:"peerlist", user:myUser, peersList:Object.keys(channels)};
-  for(let id in channels){
-    if(channels[id].readyState==="open") channels[id].send(JSON.stringify(msg));
-  }
-  updateNetworkUI();
-}
-
-function updateNetworkUI() {
-    netStatus.innerHTML = "";
-
-    // daftar peer langsung selain diri sendiri
-    let directPeers = [];
-    for (let id in channels) {
-        if (channels[id].readyState === "open" && id !== myUser) {
-            directPeers.push(id);
-        }
-    }
-
-    if (directPeers.length) {
-        let div = document.createElement("div");
-        div.innerText = `Kamu terhubung langsung dengan ${directPeers.length} user, yakni: ${directPeers.join(", ")}`;
-        netStatus.appendChild(div);
-    }
-
-    // peers di network tapi bukan langsung, dan bukan diri sendiri
-    let indirectPeersSet = new Set();
-    for (let user in networkPeers) {
-        if (user === myUser) continue; // jangan ikut nama sendiri
-        networkPeers[user].forEach(p => {
-            if (p !== myUser && !directPeers.includes(p)) {
-                indirectPeersSet.add(p);
-            }
-        });
-    }
-
-    let indirectPeers = Array.from(indirectPeersSet);
-
-    if (indirectPeers.length) {
-        let div = document.createElement("div");
-        div.innerText = `Sementara belum terhubung langsung ke ${indirectPeers.length} user, yakni: ${indirectPeers.join(", ")}`;
-        netStatus.appendChild(div);
-    }
 }
 
 function updateCount(){
