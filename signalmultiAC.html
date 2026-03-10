@@ -33,36 +33,40 @@ textarea{width:100%;height:70px;margin-top:5px;}
 <button onclick="sendMsg()">Send</button>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
 const myUser="User"+Math.floor(Math.random()*10000);
-let pc, channel;
-
+let pc, channel; // global channel
 function createOffer(){
   pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
   channel = pc.createDataChannel("chat");
   setupChannel(channel);
   pc.onicecandidate = e => {
     if(!e.candidate){
-      document.getElementById("connCode").value = btoa(pc.localDescription.sdp); // base64 offer
+      // kompres base64
+      document.getElementById("connCode").value = LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
     }
   };
   pc.createOffer().then(o=>pc.setLocalDescription(o));
 }
 
 function pasteCode(){
-  let sdp = atob(document.getElementById("connCode").value.trim());
+  let sdp = LZString.decompressFromEncodedURIComponent(document.getElementById("connCode").value.trim());
   pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-  pc.ondatachannel = e => setupChannel(e.channel);
+  pc.ondatachannel = e => {
+    channel = e.channel;
+    setupChannel(channel);
+  };
   pc.setRemoteDescription({type:"offer", sdp:sdp}).then(()=>{
     pc.createAnswer().then(a=>{
       pc.setLocalDescription(a).then(()=>{
-        document.getElementById("connCode").value = btoa(pc.localDescription.sdp);
+        document.getElementById("connCode").value = LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
       });
     });
   });
   pc.onicecandidate = e => {
     if(!e.candidate){
-      document.getElementById("connCode").value = btoa(pc.localDescription.sdp);
+      document.getElementById("connCode").value = LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
     }
   };
 }
