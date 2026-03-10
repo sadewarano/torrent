@@ -192,14 +192,23 @@ function setupChannel(id){
     updateCount();
 
     // kirim info peer lain
-    for(let pid in knownPeers){
-      if(pid !== id){
-        channels[id].send(JSON.stringify({
-          type:"peer",
-          code: knownPeers[pid]
-        }));
-      }
-    }
+    // kirim semua peer yang diketahui
+for(let pid in knownPeers){
+  if(pid !== id){
+    channels[id].send(JSON.stringify({
+      type:"peer",
+      code: knownPeers[pid]
+    }));
+  }
+}
+
+// kirim code diri sendiri juga
+if(myCode.value){
+  channels[id].send(JSON.stringify({
+    type:"peer",
+    code: myCode.value
+  }));
+}
 
   };
 
