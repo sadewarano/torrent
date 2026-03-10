@@ -2,142 +2,60 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat Broadcast - Ultra Fast</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>P2P Chat Ultra Minimal</title>
 <style>
-body{font-family:Arial;background:#e5ddd5;margin:0;display:flex;flex-direction:column;height:100vh;}
-header{background:#075E54;color:white;padding:12px;text-align:center;font-weight:bold;}
-.status{background:white;padding:8px;text-align:center;font-size:14px;border-bottom:1px solid #ddd;}
-.controls{background:white;padding:10px;border-bottom:1px solid #ddd;}
-textarea{width:100%;height:70px;border-radius:6px;border:1px solid #ccc;padding:6px;margin-top:5px;font-size:16px;}
-button{background:#128C7E;color:white;border:none;padding:8px 12px;border-radius:6px;margin-top:5px;}
-.row{display:flex;gap:5px;}
-.chat{height:35vh;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #ddd;background:#f9f9f9;}
-.msg{max-width:70%;padding:8px 10px;border-radius:10px;font-size:14px;word-wrap:break-word;animation:fadeIn .2s ease;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
-.me{align-self:flex-end;background:#dcf8c6;}
-.peer{align-self:flex-start;background:white;}
-.inputBar{display:flex;background:white;padding:8px;gap:5px;border-top:1px solid #ddd;}
-.inputBar input{flex:1;padding:10px;border-radius:20px;border:1px solid #ccc;font-size:16px;}
-.send{background:#128C7E;border:none;color:white;padding:10px 16px;border-radius:20px;}
+body{font-family:Arial;margin:0;padding:0;display:flex;flex-direction:column;height:100vh}
+header{background:#075E54;color:#fff;text-align:center;padding:10px}
+textarea,input,button{font-size:14px;margin:5px}
+.chat{flex:1;overflow-y:auto;background:#f9f9f9;padding:5px}
+.msg{margin:2px;padding:4px;border-radius:5px}
+.me{background:#dcf8c6;text-align:right}
+.peer{background:#fff;text-align:left}
 </style>
 </head>
 <body>
-
-<header>P2P Multi Chat Broadcast - Ultra Fast</header>
-
-<div class="status">Peers connected: <b id="count">0</b></div>
-
-<div class="controls">
-<button onclick="createOffer()">Generate Offer</button>
-<textarea id="connCode" placeholder="Connection code"></textarea>
-<div class="row">
-  <button onclick="copyText('connCode')">Copy</button>
-  <button onclick="pasteText()">Paste</button>
-</div>
-</div>
-
-<div id="chat" class="chat"></div>
-
-<div class="inputBar">
-  <input id="msg" placeholder="Type message...">
-  <button class="send" onclick="sendMsg()">Send</button>
-</div>
-
+<header>P2P Chat Ultra Minimal</header>
+<textarea id="conn" placeholder="Offer / Answer"></textarea>
+<button onclick="gen()">Generate Offer</button>
+<button onclick="proc()">Connect</button>
+<div class="chat" id="chat"></div>
+<input id="msg" placeholder="Type..." onkeypress="if(event.key==='Enter'){send()}">
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 <script>
-const myUser="User"+uid();
-let peers={}, channels={}, seenMsgs=new Set();
-
-function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
-
-function newPeer(id){
-  let pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-  pc.ondatachannel=e=>{channels[id]=e.channel;setupChannel(id);}
-  peers[id]=pc;
-  return pc;
-}
-
-function createOffer(){
-  let id=uid();
-  let pc=newPeer(id);
-  let ch=pc.createDataChannel("chat");
-  channels[id]=ch;
-  setupChannel(id);
-  pc.createOffer({offerToReceiveAudio:false, offerToReceiveVideo:false}).then(o=>pc.setLocalDescription(o));
+const id="p"+Date.now()+Math.floor(Math.random()*9999);
+let pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]}),dc,chs={}; 
+function gen(){
+  dc=pc.createDataChannel("c");
+  dc.onmessage=e=>add(e.data,'peer');
+  pc.createOffer().then(o=>pc.setLocalDescription(o));
   pc.onicecandidate=e=>{
     if(!e.candidate){
       let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
-      connCode.value=id+"o"+s;
+      document.getElementById('conn').value=id+"o"+s;
     }
   };
 }
-
-function processCode(){
-  let code=connCode.value.trim(); if(!code) return;
-  let id=code.match(/^p\d+/)[0]; let type=code[id.length];
-  let data=code.slice(id.length+1);
-  let sdp=LZString.decompressFromEncodedURIComponent(data);
-  let pc=peers[id] || newPeer(id);
-  if(type==="o"){
-    pc.setRemoteDescription({type:"offer",sdp:sdp});
-    pc.createAnswer({offerToReceiveAudio:false, offerToReceiveVideo:false})
-      .then(a=>pc.setLocalDescription(a));
+function proc(){
+  let code=document.getElementById('conn').value.trim();
+  let pid=code.match(/^p\d+/)[0],type=code[pid.length],sdp=LZString.decompressFromEncodedURIComponent(code.slice(pid.length+1));
+  pc.setRemoteDescription({type:type==='o'?'offer':'answer',sdp:sdp});
+  if(type==='o'){
+    pc.createAnswer().then(a=>pc.setLocalDescription(a));
     pc.onicecandidate=e=>{
       if(!e.candidate){
         let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
-        connCode.value=id+"a"+s;
+        document.getElementById('conn').value=id+"a"+s;
       }
     };
-  } else if(type==="a"){
-    pc.setRemoteDescription({type:"answer",sdp:sdp});
   }
+  pc.ondatachannel=e=>{dc=e.channel;dc.onmessage=ev=>add(ev.data,'peer')};
 }
-
-function setupChannel(id){
-  channels[id].onopen=()=>updateCount();
-  channels[id].onmessage=(e)=>{
-    let msgObj;
-    try{ msgObj=JSON.parse(e.data); }catch{ msgObj={id:uid(), text:e.data, sender:id}; }
-    broadcastMessage(msgObj,id);
-  };
-  channels[id].onclose=()=>updateCount();
+function send(){
+  let m=document.getElementById('msg').value;
+  if(!m) return;
+  dc?.send(m); add(m,'me'); document.getElementById('msg').value='';
 }
-
-function sendMsg(){
-  let text=msg.value.trim(); if(!text) return;
-  let msgObj={id:uid(), text:text, sender:myUser};
-  for(let id in channels) if(channels[id].readyState==="open") channels[id].send(JSON.stringify(msgObj));
-  addMessage(msgObj);
-  seenMsgs.add(msgObj.id);
-  msg.value=""; msg.focus();
-}
-
-function broadcastMessage(msgObj,idFrom){
-  if(seenMsgs.has(msgObj.id)) return;
-  seenMsgs.add(msgObj.id);
-  for(let id in channels) if(id!==idFrom && channels[id].readyState==="open") channels[id].send(JSON.stringify(msgObj));
-  addMessage(msgObj);
-}
-
-function addMessage(msgObj){
-  let div=document.createElement("div");
-  div.className=(msgObj.sender===myUser)?"msg me":"msg peer";
-  div.innerText=msgObj.sender+" : "+msgObj.text;
-  chat.appendChild(div); chat.scrollTop=chat.scrollHeight;
-}
-
-function updateCount(){
-  let n=0; for(let id in channels) if(channels[id].readyState==="open") n++;
-  count.innerText=n;
-}
-
-function copyText(id){let t=document.getElementById(id); t.select(); document.execCommand("copy");}
-async function pasteText(){let text=await navigator.clipboard.readText(); connCode.value=text; processCode(); }
-
-connCode.addEventListener("input",()=>processCode());
-msg.addEventListener("keypress",e=>{if(e.key==="Enter"){e.preventDefault();sendMsg();}});
+function add(t,c){let d=document.createElement('div');d.className='msg '+c;d.innerText=t;document.getElementById('chat').appendChild(d);}
 </script>
-
 </body>
 </html>
