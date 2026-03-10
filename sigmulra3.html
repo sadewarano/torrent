@@ -2,11 +2,10 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat</title>
+<title>P2P Multi Chat Broadcast</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-
 body{
 font-family:Arial;
 background:#e5ddd5;
@@ -61,13 +60,15 @@ display:flex;
 gap:5px;
 }
 
-.chat{
+.chat,.broadcast{
 flex:1;
 overflow-y:auto;
 padding:10px;
 display:flex;
 flex-direction:column;
 gap:8px;
+border-top:1px solid #ddd;
+background:#f9f9f9;
 }
 
 .msg{
@@ -86,6 +87,14 @@ background:#dcf8c6;
 .peer{
 align-self:flex-start;
 background:white;
+}
+
+.broadcast-msg{
+padding:6px 10px;
+background:#fff3cd;
+border-left:4px solid #ffc107;
+border-radius:6px;
+font-size:13px;
 }
 
 .inputBar{
@@ -110,27 +119,12 @@ color:white;
 padding:10px 16px;
 border-radius:20px;
 }
-
-.broadcast{
-height:140px;
-overflow-y:auto;
-background:#fff8dc;
-border-top:1px solid #ddd;
-padding:8px;
-font-size:13px;
-}
-
-.broadcastMsg{
-padding:4px;
-border-bottom:1px dashed #ccc;
-}
-
 </style>
 </head>
 
 <body>
 
-<header>P2P Multi Chat</header>
+<header>P2P Multi Chat Broadcast</header>
 
 <div class="status">
 User: <b id="myName"></b> |
@@ -138,22 +132,20 @@ Peers connected: <b id="count">0</b>
 </div>
 
 <div class="controls">
-
 <button onclick="createOffer()">Generate Offer</button>
 
-<textarea id="myCode" placeholder="your code"></textarea>
+<textarea id="myCode" placeholder="Your code"></textarea>
 
 <div class="row">
 <button onclick="copyText('myCode')">Copy</button>
 </div>
 
-<textarea id="partnerCode" placeholder="partner code"></textarea>
+<textarea id="partnerCode" placeholder="Partner code"></textarea>
 
 <div class="row">
 <button onclick="pasteText('partnerCode')">Paste</button>
 <button onclick="processCode()">Connect</button>
 </div>
-
 </div>
 
 <div id="chat" class="chat"></div>
@@ -176,16 +168,11 @@ let seenMsgs=new Set()
 /* USERNAME PERSISTENT */
 
 function randomUser(){
-
 let chars="abcdefghijklmnopqrstuvwxyz0123456789"
 let name="u"
-
 for(let i=0;i<6;i++){
 name+=chars[Math.floor(Math.random()chars.length)]
 }
-
-name+=Date.now().toString().slice(-3)
-
 return name
 }
 
@@ -199,7 +186,7 @@ localStorage.setItem("p2pUser",username)
 document.getElementById("myName").innerText=username
 
 
-/ MESSAGE ID */
+/ ID GENERATOR */
 
 function uid(){
 return "m"+Date.now()+Math.floor(Math.random()*10000)
@@ -210,7 +197,7 @@ return "p"+Date.now()+Math.floor(Math.random()10000)
 }
 
 
-/ PEER CONNECTION /
+/ WEBRTC PEER /
 
 function newPeer(id){
 
@@ -248,6 +235,7 @@ pc.onicecandidate=e=>{
 if(!e.candidate){
 
 let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
+
 myCode.value=id+"o"+s
 
 }
@@ -282,6 +270,7 @@ pc.onicecandidate=e=>{
 if(!e.candidate){
 
 let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
+
 myCode.value=id+"a"+s
 
 }
@@ -304,9 +293,7 @@ function setupChannel(id){
 
 channels[id].onopen=updateCount
 
-channels[id].onmessage=e=>{
-handleIncoming(e.data,id)
-}
+channels[id].onmessage=e=>receiveMessage(e.data,id)
 
 channels[id].onclose=updateCount
 
@@ -324,18 +311,18 @@ if(!text) return
 let message={
 id:uid(),
 user:username,
-text:text
+text:text,
+time:Date.now()
 }
 
 let raw=JSON.stringify(message)
 
 seenMsgs.add(message.id)
 
-broadcast(raw)
+relay(raw)
 
-addChat(text,true)
-
-addBroadcast(username,text)
+addChat(message,true)
+addBroadcast(message)
 
 msg.value=""
 
@@ -344,32 +331,40 @@ msg.value=""
 
 / RECEIVE MESSAGE /
 
-function handleIncoming(raw,from){
+function receiveMessage(raw,from){
 
-let message=JSON.parse(raw)
+let msgObj
 
-if(seenMsgs.has(message.id)) return
+try{
+msgObj=JSON.parse(raw)
+}catch{
+return
+}
 
-seenMsgs.add(message.id)
+if(seenMsgs.has(msgObj.id)) return
 
-addChat(message.text,false,message.user)
-addBroadcast(message.user,message.text)
+seenMsgs.add(msgObj.id)
 
-broadcast(raw,from)
+addChat(msgObj,false)
+addBroadcast(msgObj)
+
+relay(raw,from)
 
 }
 
 
-/ BROADCAST /
+/ RELAY /
 
-function broadcast(raw,except=null){
+function relay(raw,except=null){
 
 for(let id in channels){
 
 let ch=channels[id]
 
 if(ch.readyState==="open" && id!==except){
+
 ch.send(raw)
+
 }
 
 }
@@ -379,13 +374,13 @@ ch.send(raw)
 
 / UI CHAT /
 
-function addChat(text,isMe,user=""){
+function addChat(msg,isMe){
 
 let div=document.createElement("div")
 
 div.className="msg "+(isMe?"me":"peer")
 
-div.innerText=isMe ? text : user+": "+text
+div.innerText=isMe ? msg.text : msg.user+": "+msg.text
 
 chat.appendChild(div)
 
@@ -396,13 +391,13 @@ chat.scrollTop=chat.scrollHeight
 
 / UI BROADCAST /
 
-function addBroadcast(user,text){
+function addBroadcast(msg){
 
 let div=document.createElement("div")
 
-div.className="broadcastMsg"
+div.className="broadcast-msg"
 
-div.innerText=user+": "+text
+div.innerText=msg.user+": "+msg.text
 
 broadcast.appendChild(div)
 
@@ -426,12 +421,14 @@ count.innerText=n
 }
 
 
-/ COPY / PASTE /
+/ COPY PASTE /
 
 function copyText(id){
 
 let t=document.getElementById(id)
+
 t.select()
+
 document.execCommand("copy")
 
 }
@@ -439,6 +436,7 @@ document.execCommand("copy")
 async function pasteText(id){
 
 let text=await navigator.clipboard.readText()
+
 document.getElementById(id).value=text
 
 }
