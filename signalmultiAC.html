@@ -1,115 +1,188 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat + WebTorrent Auto-Rejoin</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<title>P2P Multi Chat Broadcast - Ultra Fast (Compressed Offer)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
-body{font-family:sans-serif;padding:10px;max-width:600px;margin:auto;}
-textarea{width:100%;height:60px;margin:4px 0;border-radius:6px;padding:6px;}
-button{padding:8px 12px;margin:4px;border-radius:6px;}
-#chat{border:1px solid #ccc;padding:8px;height:200px;overflow:auto;}
-.msg{margin:4px 0;}
-.me{color:green;}
-.peer{color:blue;}
+/* sama seperti CSS-mu sebelumnya */
+body{font-family:Arial;background:#e5ddd5;margin:0;display:flex;flex-direction:column;height:100vh;}
+header{background:#075E54;color:white;padding:12px;text-align:center;font-weight:bold;}
+.status{background:white;padding:8px;text-align:center;font-size:14px;border-bottom:1px solid #ddd;}
+.controls{background:white;padding:10px;border-bottom:1px solid #ddd;}
+textarea{width:100%;height:70px;border-radius:6px;border:1px solid #ccc;padding:6px;margin-top:5px;font-size:16px;}
+button{background:#128C7E;color:white;border:none;padding:8px 12px;border-radius:6px;margin-top:5px;}
+.row{display:flex;gap:5px;}
+.chat{height:35vh;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #ddd;background:#f9f9f9;}
+.msg{max-width:70%;padding:8px 10px;border-radius:10px;font-size:14px;word-wrap:break-word;animation:fadeIn .2s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+.me{align-self:flex-end;background:#dcf8c6;}
+.peer{align-self:flex-start;background:white;}
+.inputBar{display:flex;background:white;padding:8px;gap:5px;border-top:1px solid #ddd;}
+.inputBar input{flex:1;padding:10px;border-radius:20px;border:1px solid #ccc;font-size:16px;}
+.send{background:#128C7E;border:none;color:white;padding:10px 16px;border-radius:20px;}
 </style>
 </head>
 <body>
 
-<h2>Chat P2P via WebTorrent (Auto-Rejoin)</h2>
+<header>P2P Multi Chat Broadcast - Ultra Fast (Compressed Offer)</header>
 
-<div id="chat"></div>
+<div class="status">
+Peers connected: <b id="count">0</b>
+</div>
 
-<textarea id="msg" placeholder="Type message..."></textarea>
-<button onclick="sendMsg()">Send</button>
+<div class="controls">
+<button onclick="createOffer()">Generate Offer</button>
+<textarea id="connCode" placeholder="Connection code"></textarea>
+<div class="row">
+  <button onclick="copyText('connCode')">Copy</button>
+  <button onclick="pasteText()">Paste</button>
+</div>
+</div>
 
-<hr>
+<div id="chat" class="chat"></div>
 
-<label>Magnet / Torrent terbaru:</label>
-<input type="text" id="magnet" placeholder="Paste magnet / BTIH" style="width:100%;">
-<button onclick="downloadTorrent()">Download Latest</button>
+<div class="inputBar">
+  <input id="msg" placeholder="Type message...">
+  <button class="send" onclick="sendMsg()">Send</button>
+</div>
 
-<div id="info"></div>
+<!-- Load pako.js untuk DEFLATE compression -->
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <script>
-const client = new WebTorrent();
-let chatLog = [];
-let currentTorrent = null;
+const myUser="User"+uid();
+let peers={}, channels={}, seenMsgs=new Set();
 
-// ================== LOAD LOCAL STORAGE ==================
-if(localStorage.getItem("chatLog")){
-    chatLog = JSON.parse(localStorage.getItem("chatLog"));
-    renderChat();
+function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
+
+// konversi buffer ke URL-safe base64
+function toBase64Url(buf) {
+    let b64 = btoa(String.fromCharCode.apply(null, buf));
+    return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 
-// ================== SEND MESSAGE ==================
-function sendMsg(){
-    const textarea = document.getElementById("msg");
-    const text = textarea.value.trim();
-    if(!text) return;
-    const msgObj = {id:Date.now(), text:text, sender:"Me"};
-    chatLog.push(msgObj);
-    localStorage.setItem("chatLog", JSON.stringify(chatLog));
-    renderChat();
-    textarea.value = "";
-    createTorrent();
+function fromBase64Url(str) {
+    str = str.replace(/-/g,'+').replace(/_/g,'/');
+    while(str.length % 4) str += '=';
+    let binary = atob(str);
+    let buf = new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) buf[i]=binary.charCodeAt(i);
+    return buf;
 }
 
-// ================== RENDER CHAT ==================
-function renderChat(){
-    const chat = document.getElementById("chat");
-    chat.innerHTML = "";
-    chatLog.forEach(m=>{
-        const div = document.createElement("div");
-        div.className = "msg " + (m.sender==="Me"?"me":"peer");
-        div.innerText = m.sender + ": " + m.text;
-        chat.appendChild(div);
-    });
-    chat.scrollTop = chat.scrollHeight;
+function newPeer(id){
+  let pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+  pc.ondatachannel=e=>{
+    channels[id]=e.channel;
+    setupChannel(id);
+  };
+  peers[id]=pc;
+  return pc;
 }
 
-// ================== CREATE TORRENT ==================
-function createTorrent(){
-    if(currentTorrent){
-        currentTorrent.destroy();
-        currentTorrent = null;
+function createOffer(){
+  let id=uid();
+  let pc=newPeer(id);
+  let ch=pc.createDataChannel("chat");
+  channels[id]=ch;
+  setupChannel(id);
+  pc.createOffer().then(o=>pc.setLocalDescription(o));
+  pc.onicecandidate=e=>{
+    if(!e.candidate){
+      // gunakan pako untuk kompresi
+      let compressed = pako.deflate(pc.localDescription.sdp);
+      let encoded = toBase64Url(compressed);
+      connCode.value=id+"o"+encoded;
     }
-
-    const blob = new Blob([JSON.stringify(chatLog, null, 2)], {type:"application/json"});
-    client.seed(blob, torrent=>{
-        currentTorrent = torrent;
-        document.getElementById("magnet").value = torrent.magnetURI;
-        document.getElementById("info").innerText = "✅ Torrent updated! Magnet ready.";
-    });
+  };
 }
 
-// ================== DOWNLOAD TORRENT ==================
-function downloadTorrent(){
-    const magnet = document.getElementById("magnet").value.trim();
-    if(!magnet) return alert("Masukkan magnet");
+function processCode(){
+  let code=connCode.value.trim();
+  if(!code) return;
+  let id=code.match(/^p\d+/)[0];
+  let type=code[id.length];
+  let data=code.slice(id.length+1);
+  let sdp;
+  try{
+    let buf = fromBase64Url(data);
+    sdp = pako.inflate(buf, { to: 'string' });
+  } catch(e){
+    console.error("Failed to decompress, fallback to LZString");
+    sdp = LZString.decompressFromEncodedURIComponent(data);
+  }
 
-    client.add(magnet, torrent=>{
-        currentTorrent = torrent;
-        document.getElementById("info").innerText = "⬇️ Downloading chat log...";
-        torrent.files[0].getBlob((err, blob)=>{
-            if(err) return alert("Gagal ambil file");
-            const reader = new FileReader();
-            reader.onload = e=>{
-                try{
-                    chatLog = JSON.parse(e.target.result);
-                    localStorage.setItem("chatLog", JSON.stringify(chatLog));
-                    renderChat();
-                    document.getElementById("info").innerText = "✅ Chat log updated from torrent";
-                }catch(err){
-                    alert("JSON error: "+err);
-                }
-            };
-            reader.readAsText(blob);
-        });
-    });
+  let pc=peers[id] || newPeer(id);
+  if(type==="o"){
+    pc.setRemoteDescription({type:"offer",sdp:sdp});
+    pc.createAnswer().then(a=>pc.setLocalDescription(a));
+    pc.onicecandidate=e=>{
+      if(!e.candidate){
+        let compressed = pako.deflate(pc.localDescription.sdp);
+        let encoded = toBase64Url(compressed);
+        connCode.value=id+"a"+encoded;
+      }
+    };
+  } else if(type==="a"){
+    pc.setRemoteDescription({type:"answer",sdp:sdp});
+  }
 }
 
+function setupChannel(id){
+  channels[id].onopen=()=>{updateCount();};
+  channels[id].onmessage=(e)=>{
+    let msgObj;
+    try{ msgObj=JSON.parse(e.data); }catch{ msgObj={id:uid(), text:e.data, sender:id}; }
+    broadcastMessage(msgObj,id);
+  };
+  channels[id].onclose=()=>{updateCount();};
+}
+
+function sendMsg(){
+  let text=msg.value.trim();
+  if(!text) return;
+  let msgObj={id:uid(), text:text, sender:myUser};
+  for(let id in channels){
+    if(channels[id].readyState==="open"){
+      channels[id].send(JSON.stringify(msgObj));
+    }
+  }
+  addMessage(msgObj);
+  seenMsgs.add(msgObj.id);
+  msg.value=""; msg.focus();
+}
+
+function broadcastMessage(msgObj,idFrom){
+  if(seenMsgs.has(msgObj.id)) return;
+  seenMsgs.add(msgObj.id);
+  for(let id in channels){
+    if(id!==idFrom && channels[id].readyState==="open"){
+      channels[id].send(JSON.stringify(msgObj));
+    }
+  }
+  addMessage(msgObj);
+}
+
+function addMessage(msgObj){
+  let div=document.createElement("div");
+  div.className=(msgObj.sender===myUser)?"msg me":"msg peer";
+  div.innerText=msgObj.sender+" : "+msgObj.text;
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+function updateCount(){
+  let n=0;
+  for(let id in channels) if(channels[id].readyState==="open") n++;
+  count.innerText=n;
+}
+
+function copyText(id){let t=document.getElementById(id); t.select(); document.execCommand("copy");}
+async function pasteText(){let text=await navigator.clipboard.readText(); connCode.value=text; processCode(); }
+
+connCode.addEventListener("input",()=>{processCode();});
+msg.addEventListener("keypress",e=>{if(e.key==="Enter"){e.preventDefault();sendMsg();}});
 </script>
 </body>
 </html>
