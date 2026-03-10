@@ -6,56 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body{
-font-family:Arial;
-background:#f2f2f2;
-padding:15px;
-}
-
-textarea{
-width:100%;
-height:90px;
-margin-top:5px;
-border-radius:8px;
-padding:8px;
-}
-
-#chat{
-height:220px;
-}
-
-button{
-padding:10px;
-border:none;
-border-radius:8px;
-background:#2196F3;
-color:white;
-margin-top:5px;
-}
-
-.row{
-display:flex;
-gap:5px;
-}
-
-.status{
-background:white;
-padding:8px;
-border-radius:8px;
-margin-bottom:10px;
-text-align:center;
-}
-
-input{
-width:70%;
-padding:10px;
-border-radius:8px;
-border:1px solid #ccc;
-}
-
-.send{
-width:28%;
-}
+body{font-family:Arial;background:#f2f2f2;padding:15px}
+textarea{width:100%;height:90px;margin-top:5px;border-radius:8px;padding:8px}
+#chat{height:220px}
+button{padding:10px;border:none;border-radius:8px;background:#2196F3;color:white;margin-top:5px}
+.row{display:flex;gap:5px}
+.status{background:white;padding:8px;border-radius:8px;margin-bottom:10px;text-align:center}
+input{width:70%;padding:10px;border-radius:8px;border:1px solid #ccc}
+.send{width:28%}
 </style>
 </head>
 
@@ -67,7 +25,7 @@ width:28%;
 Peers connected: <b id="count">0</b>
 </div>
 
-<h3>Create Connection</h3>
+<h3>Your Code</h3>
 
 <button onclick="createOffer()">Generate Offer</button>
 
@@ -77,13 +35,13 @@ Peers connected: <b id="count">0</b>
 <button onclick="copyText('myCode')">Copy</button>
 </div>
 
-<h3>Connect Peer</h3>
+<h3>Partner Code</h3>
 
 <textarea id="partnerCode"></textarea>
 
 <div class="row">
 <button onclick="pasteText('partnerCode')">Paste</button>
-<button onclick="connectPeer()">Connect</button>
+<button onclick="processCode()">Process</button>
 </div>
 
 <h3>Chat</h3>
@@ -99,9 +57,9 @@ Peers connected: <b id="count">0</b>
 
 let peers={}
 let channels={}
-let peerIndex=0
+let peerCounter=0
 
-function createPeer(id){
+function newPeer(id){
 
 let pc=new RTCPeerConnection({
 iceServers:[{urls:"stun:stun.l.google.com:19302"}]
@@ -112,14 +70,17 @@ channels[id]=e.channel
 setupChannel(id)
 }
 
+peers[id]=pc
+
 return pc
+
 }
 
 function createOffer(){
 
-let id="peer"+(++peerIndex)
+let id="peer"+(++peerCounter)
 
-let pc=createPeer(id)
+let pc=newPeer(id)
 
 let channel=pc.createDataChannel("chat")
 
@@ -133,27 +94,29 @@ pc.setLocalDescription(o)
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
+
 myCode.value=JSON.stringify({
 id:id,
+type:"offer",
 sdp:pc.localDescription
 })
-peers[id]=pc
+
 }
 }
 
 }
 
-function connectPeer(){
+function processCode(){
 
 let data=JSON.parse(partnerCode.value)
 
 let id=data.id
 
-let pc=createPeer(id)
+let pc=peers[id] || newPeer(id)
+
+if(data.type==="offer"){
 
 pc.setRemoteDescription(data.sdp)
-
-if(data.sdp.type==="offer"){
 
 pc.createAnswer().then(a=>{
 pc.setLocalDescription(a)
@@ -161,16 +124,23 @@ pc.setLocalDescription(a)
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
+
 myCode.value=JSON.stringify({
 id:id,
+type:"answer",
 sdp:pc.localDescription
 })
+
 }
 }
 
 }
 
-peers[id]=pc
+else if(data.type==="answer"){
+
+pc.setRemoteDescription(data.sdp)
+
+}
 
 }
 
@@ -188,20 +158,24 @@ chat.scrollTop=chat.scrollHeight
 
 }
 
+channels[id].onclose=()=>{
+updateCount()
+}
+
 }
 
 function sendMsg(){
 
 let text=msg.value
 
-if(text==="")return
+if(text==="") return
 
 for(let id in channels){
 
-if(channels[id].readyState==="open"){
+let ch=channels[id]
 
-channels[id].send(text)
-
+if(ch.readyState==="open"){
+ch.send(text)
 }
 
 }
