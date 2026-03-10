@@ -2,9 +2,8 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat FWD</title>
+<title>P2P Multi Chat Broadcast</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body{
   font-family:Arial;
@@ -14,7 +13,6 @@ body{
   flex-direction:column;
   height:100vh;
 }
-
 header{
   background:#075E54;
   color:white;
@@ -22,21 +20,18 @@ header{
   text-align:center;
   font-weight:bold;
 }
-
 .status{
-  background:#ffffff;
+  background:white;
   padding:8px;
   text-align:center;
   font-size:14px;
   border-bottom:1px solid #ddd;
 }
-
 .controls{
   background:white;
   padding:10px;
   border-bottom:1px solid #ddd;
 }
-
 textarea{
   width:100%;
   height:70px;
@@ -45,7 +40,6 @@ textarea{
   padding:6px;
   margin-top:5px;
 }
-
 button{
   background:#128C7E;
   color:white;
@@ -54,13 +48,11 @@ button{
   border-radius:6px;
   margin-top:5px;
 }
-
 .row{
   display:flex;
   gap:5px;
 }
-
-.chat{
+.chat, .broadcast{
   flex:1;
   overflow-y:auto;
   padding:10px;
@@ -68,10 +60,8 @@ button{
   flex-direction:column;
   gap:8px;
   border-top:1px solid #ddd;
-  border-bottom:1px solid #ddd;
-  background:#f0f0f0;
+  background:#f9f9f9;
 }
-
 .msg{
   max-width:70%;
   padding:8px 10px;
@@ -79,17 +69,15 @@ button{
   font-size:14px;
   word-wrap:break-word;
 }
-
-.me{
-  align-self:flex-end;
-  background:#dcf8c6;
+.me{align-self:flex-end;background:#dcf8c6;}
+.peer{align-self:flex-start;background:white;}
+.broadcast-msg{
+  padding:6px 10px;
+  background:#fff3cd;
+  border-left:4px solid #ffc107;
+  border-radius:6px;
+  font-size:13px;
 }
-
-.peer{
-  align-self:flex-start;
-  background:white;
-}
-
 .inputBar{
   display:flex;
   background:white;
@@ -97,14 +85,12 @@ button{
   gap:5px;
   border-top:1px solid #ddd;
 }
-
 .inputBar input{
   flex:1;
   padding:10px;
   border-radius:20px;
   border:1px solid #ccc;
 }
-
 .send{
   background:#128C7E;
   border:none;
@@ -112,174 +98,153 @@ button{
   padding:10px 16px;
   border-radius:20px;
 }
-
-/* Chat FWD log style */
-#chatFwd{
-  flex:1;
-  overflow-y:auto;
-  padding:10px;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  border-top:1px solid #aaa;
-  background:#fffbe6;
-}
 </style>
 </head>
-
 <body>
 
-<header>P2P Multi Chat</header>
+<header>P2P Multi Chat Broadcast</header>
 
-<div class="status">
-Peers connected: <b id="count">0</b>
-</div>
+<div class="status">Peers connected: <b id="count">0</b></div>
 
 <div class="controls">
-  <button onclick="createOffer()">Generate Offer</button>
-  <textarea id="myCode" placeholder="your code"></textarea>
-  <div class="row">
-    <button onclick="copyText('myCode')">Copy</button>
-  </div>
-  <textarea id="partnerCode" placeholder="partner code"></textarea>
-  <div class="row">
-    <button onclick="pasteText('partnerCode')">Paste</button>
-    <button onclick="processCode()">Connect</button>
-  </div>
+<button onclick="createOffer()">Generate Offer</button>
+<textarea id="myCode" placeholder="Your code"></textarea>
+<div class="row">
+<button onclick="copyText('myCode')">Copy</button>
+</div>
+<textarea id="partnerCode" placeholder="Partner code"></textarea>
+<div class="row">
+<button onclick="pasteText('partnerCode')">Paste</button>
+<button onclick="processCode()">Connect</button>
+</div>
 </div>
 
-<!-- Chat log utama -->
 <div id="chat" class="chat"></div>
 
-<!-- Chat log FWD -->
-<div id="chatFwd"></div>
-
 <div class="inputBar">
-  <input id="msg" placeholder="Type message...">
-  <button class="send" onclick="sendMsg()">Send</button>
+<input id="msg" placeholder="Type message...">
+<button class="send" onclick="sendMsg()">Send</button>
 </div>
 
+<div id="broadcast" class="broadcast"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
-
 <script>
-let peers={}
-let channels={}
 
-function uid(){
-  return "p"+Date.now()+Math.floor(Math.random()*10000)
-}
+let peers={}, channels={}, seenMsgs=new Set();
+
+function uid(){return "p"+Date.now()+Math.floor(Math.random()*10000)}
 
 function newPeer(id){
-  let pc=new RTCPeerConnection({
-    iceServers:[{urls:"stun:stun.l.google.com:19302"}]
-  })
+  let pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
   pc.ondatachannel=e=>{
-    channels[id]=e.channel
-    setupChannel(id)
-  }
-  peers[id]=pc
-  return pc
+    channels[id]=e.channel;
+    setupChannel(id);
+  };
+  peers[id]=pc;
+  return pc;
 }
 
 function createOffer(){
-  let id=uid()
-  let pc=newPeer(id)
-  let ch=pc.createDataChannel("chat")
-  channels[id]=ch
-  setupChannel(id)
-  pc.createOffer().then(o=>pc.setLocalDescription(o))
+  let id=uid();
+  let pc=newPeer(id);
+  let ch=pc.createDataChannel("chat");
+  channels[id]=ch;
+  setupChannel(id);
+  pc.createOffer().then(o=>pc.setLocalDescription(o));
   pc.onicecandidate=e=>{
     if(!e.candidate){
-      let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
-      myCode.value=id+"o"+s
+      let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
+      myCode.value=id+"o"+s;
     }
-  }
+  };
 }
 
 function processCode(){
-  let code=partnerCode.value.trim()
-  let id=code.match(/^p\d+/)[0]
-  let type=code[id.length]
-  let data=code.slice(id.length+1)
-  let sdp=LZString.decompressFromEncodedURIComponent(data)
-  let pc=peers[id] || newPeer(id)
+  let code=partnerCode.value.trim();
+  let id=code.match(/^p\d+/)[0];
+  let type=code[id.length];
+  let data=code.slice(id.length+1);
+  let sdp=LZString.decompressFromEncodedURIComponent(data);
+  let pc=peers[id] || newPeer(id);
   if(type==="o"){
-    pc.setRemoteDescription({type:"offer",sdp:sdp})
-    pc.createAnswer().then(a=>pc.setLocalDescription(a))
+    pc.setRemoteDescription({type:"offer",sdp:sdp});
+    pc.createAnswer().then(a=>pc.setLocalDescription(a));
     pc.onicecandidate=e=>{
       if(!e.candidate){
-        let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
-        myCode.value=id+"a"+s
+        let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
+        myCode.value=id+"a"+s;
       }
-    }
+    };
   } else if(type==="a"){
-    pc.setRemoteDescription({type:"answer",sdp:sdp})
+    pc.setRemoteDescription({type:"answer",sdp:sdp});
   }
 }
 
 function setupChannel(id){
-  channels[id].onopen=()=>{ updateCount() }
+  channels[id].onopen=updateCount;
   channels[id].onmessage=e=>{
-    addMessage(e.data,false)
-  }
-  channels[id].onclose=()=>{ updateCount() }
+    broadcastMessage(e.data, id);
+    addMessage(e.data,false);
+  };
+  channels[id].onclose=updateCount;
 }
 
 function sendMsg(){
-  let text=msg.value.trim()
-  if(!text) return
-  for(let id in channels){
-    let ch=channels[id]
-    if(ch.readyState==="open") ch.send(text)
-  }
-  addMessage(text,true)
-  msg.value=""
+  let text=msg.value.trim();
+  if(!text) return;
+  let msgObj={id:uid(), text:text, sender:"me"};
+  broadcastMessage(JSON.stringify(msgObj));
+  addMessage(text,true);
+  msg.value="";
 }
 
 function addMessage(text,isMe){
-  // Tambah di chat utama
-  let div=document.createElement("div")
-  div.className="msg "+(isMe?"me":"peer")
-  div.innerText=text
-  chat.appendChild(div)
-  chat.scrollTop=chat.scrollHeight
+  let div=document.createElement("div");
+  div.className="msg "+(isMe?"me":"peer");
+  div.innerText=text;
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
+}
 
-  // Jika pesan diawali "FWD:", tambahkan ke chatFwd juga
-  if(text.startsWith("FWD:")){
-    let fwdDiv=document.createElement("div")
-    fwdDiv.className="msg "+(isMe?"me":"peer")
-    fwdDiv.innerText=text
-    chatFwd.appendChild(fwdDiv)
-    chatFwd.scrollTop=chatFwd.scrollHeight
+function broadcastMessage(raw,idFrom=null){
+  // Parse JSON if exists
+  let msgObj;
+  if(typeof raw==="string"){
+    try{ msgObj=JSON.parse(raw); } catch{ msgObj={id:uid(), text:raw, sender:idFrom||"peer"}; }
+  } else { msgObj=raw; }
+  
+  if(seenMsgs.has(msgObj.id)) return;
+  seenMsgs.add(msgObj.id);
+  
+  // Send to all connected peers except origin
+  for(let id in channels){
+    if(id!==idFrom && channels[id].readyState==="open"){
+      channels[id].send(JSON.stringify(msgObj));
+    }
   }
+  
+  // Add to broadcast log
+  let div=document.createElement("div");
+  div.className="broadcast-msg";
+  div.innerText=(msgObj.sender==="me"?"You":msgObj.sender)+": "+msgObj.text;
+  broadcast.appendChild(div);
+  broadcast.scrollTop=broadcast.scrollHeight;
 }
 
 function updateCount(){
-  let n=0
-  for(let id in channels){
-    if(channels[id].readyState==="open") n++
-  }
-  count.innerText=n
+  let n=0;
+  for(let id in channels) if(channels[id].readyState==="open") n++;
+  count.innerText=n;
 }
 
-function copyText(id){
-  let t=document.getElementById(id)
-  t.select()
-  document.execCommand("copy")
-}
+function copyText(id){let t=document.getElementById(id); t.select(); document.execCommand("copy");}
+async function pasteText(id){let text=await navigator.clipboard.readText(); document.getElementById(id).value=text;}
 
-async function pasteText(id){
-  let text=await navigator.clipboard.readText()
-  document.getElementById(id).value=text
-}
+msg.addEventListener("keypress",e=>{
+  if(e.key==="Enter"){e.preventDefault(); sendMsg();}
+});
 
-msg.addEventListener("keypress",function(e){
-  if(e.key==="Enter"){
-    e.preventDefault()
-    sendMsg()
-  }
-})
 </script>
-
 </body>
 </html>
