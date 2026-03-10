@@ -2,222 +2,283 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Multi Chat</title>
+<title>P2P Multi Chat FWD</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body{font-family:Arial;background:#f2f2f2;padding:15px}
-textarea{width:100%;height:90px;margin-top:5px;border-radius:8px;padding:8px}
-#chat{height:220px}
-button{padding:10px;border:none;border-radius:8px;background:#2196F3;color:white;margin-top:5px}
-.row{display:flex;gap:5px}
-.status{background:white;padding:8px;border-radius:8px;margin-bottom:10px;text-align:center}
-input{width:70%;padding:10px;border-radius:8px;border:1px solid #ccc}
-.send{width:28%}
+body{
+  font-family:Arial;
+  background:#e5ddd5;
+  margin:0;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+}
+
+header{
+  background:#075E54;
+  color:white;
+  padding:12px;
+  text-align:center;
+  font-weight:bold;
+}
+
+.status{
+  background:#ffffff;
+  padding:8px;
+  text-align:center;
+  font-size:14px;
+  border-bottom:1px solid #ddd;
+}
+
+.controls{
+  background:white;
+  padding:10px;
+  border-bottom:1px solid #ddd;
+}
+
+textarea{
+  width:100%;
+  height:70px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  padding:6px;
+  margin-top:5px;
+}
+
+button{
+  background:#128C7E;
+  color:white;
+  border:none;
+  padding:8px 12px;
+  border-radius:6px;
+  margin-top:5px;
+}
+
+.row{
+  display:flex;
+  gap:5px;
+}
+
+.chat{
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  border-top:1px solid #ddd;
+  border-bottom:1px solid #ddd;
+  background:#f0f0f0;
+}
+
+.msg{
+  max-width:70%;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:14px;
+  word-wrap:break-word;
+}
+
+.me{
+  align-self:flex-end;
+  background:#dcf8c6;
+}
+
+.peer{
+  align-self:flex-start;
+  background:white;
+}
+
+.inputBar{
+  display:flex;
+  background:white;
+  padding:8px;
+  gap:5px;
+  border-top:1px solid #ddd;
+}
+
+.inputBar input{
+  flex:1;
+  padding:10px;
+  border-radius:20px;
+  border:1px solid #ccc;
+}
+
+.send{
+  background:#128C7E;
+  border:none;
+  color:white;
+  padding:10px 16px;
+  border-radius:20px;
+}
+
+/* Chat FWD log style */
+#chatFwd{
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  border-top:1px solid #aaa;
+  background:#fffbe6;
+}
 </style>
 </head>
 
 <body>
 
-<h2>P2P Multi User Chat</h2>
+<header>P2P Multi Chat</header>
 
 <div class="status">
 Peers connected: <b id="count">0</b>
 </div>
 
-<h3>Your Code</h3>
-
-<button onclick="createOffer()">Generate Offer</button>
-
-<textarea id="myCode"></textarea>
-
-<div class="row">
-<button onclick="copyText('myCode')">Copy</button>
+<div class="controls">
+  <button onclick="createOffer()">Generate Offer</button>
+  <textarea id="myCode" placeholder="your code"></textarea>
+  <div class="row">
+    <button onclick="copyText('myCode')">Copy</button>
+  </div>
+  <textarea id="partnerCode" placeholder="partner code"></textarea>
+  <div class="row">
+    <button onclick="pasteText('partnerCode')">Paste</button>
+    <button onclick="processCode()">Connect</button>
+  </div>
 </div>
 
-<h3>Partner Code</h3>
+<!-- Chat log utama -->
+<div id="chat" class="chat"></div>
 
-<textarea id="partnerCode"></textarea>
+<!-- Chat log FWD -->
+<div id="chatFwd"></div>
 
-<div class="row">
-<button onclick="pasteText('partnerCode')">Paste</button>
-<button onclick="processCode()">Process</button>
+<div class="inputBar">
+  <input id="msg" placeholder="Type message...">
+  <button class="send" onclick="sendMsg()">Send</button>
 </div>
 
-<h3>Chat</h3>
-
-<textarea id="chat" readonly></textarea>
-
-<br><br>
-
-<input id="msg" placeholder="message">
-<button class="send" onclick="sendMsg()">Send</button>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 
 <script>
-
 let peers={}
 let channels={}
-let peerCounter=0
 
-function newPeer(id){
-
-let pc=new RTCPeerConnection({
-iceServers:[{urls:"stun:stun.l.google.com:19302"}]
-})
-
-pc.ondatachannel=e=>{
-channels[id]=e.channel
-setupChannel(id)
+function uid(){
+  return "p"+Date.now()+Math.floor(Math.random()*10000)
 }
 
-peers[id]=pc
-
-return pc
-
+function newPeer(id){
+  let pc=new RTCPeerConnection({
+    iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+  })
+  pc.ondatachannel=e=>{
+    channels[id]=e.channel
+    setupChannel(id)
+  }
+  peers[id]=pc
+  return pc
 }
 
 function createOffer(){
-
-let id="peer"+(++peerCounter)
-
-let pc=newPeer(id)
-
-let channel=pc.createDataChannel("chat")
-
-channels[id]=channel
-
-setupChannel(id)
-
-pc.createOffer().then(o=>{
-pc.setLocalDescription(o)
-})
-
-pc.onicecandidate=e=>{
-if(!e.candidate){
-
-myCode.value=JSON.stringify({
-id:id,
-type:"offer",
-sdp:pc.localDescription
-})
-
-}
-}
-
+  let id=uid()
+  let pc=newPeer(id)
+  let ch=pc.createDataChannel("chat")
+  channels[id]=ch
+  setupChannel(id)
+  pc.createOffer().then(o=>pc.setLocalDescription(o))
+  pc.onicecandidate=e=>{
+    if(!e.candidate){
+      let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
+      myCode.value=id+"o"+s
+    }
+  }
 }
 
 function processCode(){
-
-let data=JSON.parse(partnerCode.value)
-
-let id=data.id
-
-let pc=peers[id] || newPeer(id)
-
-if(data.type==="offer"){
-
-pc.setRemoteDescription(data.sdp)
-
-pc.createAnswer().then(a=>{
-pc.setLocalDescription(a)
-})
-
-pc.onicecandidate=e=>{
-if(!e.candidate){
-
-myCode.value=JSON.stringify({
-id:id,
-type:"answer",
-sdp:pc.localDescription
-})
-
-}
-}
-
-}
-
-else if(data.type==="answer"){
-
-pc.setRemoteDescription(data.sdp)
-
-}
-
+  let code=partnerCode.value.trim()
+  let id=code.match(/^p\d+/)[0]
+  let type=code[id.length]
+  let data=code.slice(id.length+1)
+  let sdp=LZString.decompressFromEncodedURIComponent(data)
+  let pc=peers[id] || newPeer(id)
+  if(type==="o"){
+    pc.setRemoteDescription({type:"offer",sdp:sdp})
+    pc.createAnswer().then(a=>pc.setLocalDescription(a))
+    pc.onicecandidate=e=>{
+      if(!e.candidate){
+        let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
+        myCode.value=id+"a"+s
+      }
+    }
+  } else if(type==="a"){
+    pc.setRemoteDescription({type:"answer",sdp:sdp})
+  }
 }
 
 function setupChannel(id){
-
-channels[id].onopen=()=>{
-updateCount()
-}
-
-channels[id].onmessage=e=>{
-
-chat.value+="Peer: "+e.data+"\n"
-
-chat.scrollTop=chat.scrollHeight
-
-}
-
-channels[id].onclose=()=>{
-updateCount()
-}
-
+  channels[id].onopen=()=>{ updateCount() }
+  channels[id].onmessage=e=>{
+    addMessage(e.data,false)
+  }
+  channels[id].onclose=()=>{ updateCount() }
 }
 
 function sendMsg(){
-
-let text=msg.value
-
-if(text==="") return
-
-for(let id in channels){
-
-let ch=channels[id]
-
-if(ch.readyState==="open"){
-ch.send(text)
+  let text=msg.value.trim()
+  if(!text) return
+  for(let id in channels){
+    let ch=channels[id]
+    if(ch.readyState==="open") ch.send(text)
+  }
+  addMessage(text,true)
+  msg.value=""
 }
 
-}
+function addMessage(text,isMe){
+  // Tambah di chat utama
+  let div=document.createElement("div")
+  div.className="msg "+(isMe?"me":"peer")
+  div.innerText=text
+  chat.appendChild(div)
+  chat.scrollTop=chat.scrollHeight
 
-chat.value+="Me: "+text+"\n"
-
-msg.value=""
-
-chat.scrollTop=chat.scrollHeight
-
+  // Jika pesan diawali "FWD:", tambahkan ke chatFwd juga
+  if(text.startsWith("FWD:")){
+    let fwdDiv=document.createElement("div")
+    fwdDiv.className="msg "+(isMe?"me":"peer")
+    fwdDiv.innerText=text
+    chatFwd.appendChild(fwdDiv)
+    chatFwd.scrollTop=chatFwd.scrollHeight
+  }
 }
 
 function updateCount(){
-
-let n=0
-
-for(let id in channels){
-if(channels[id].readyState==="open") n++
-}
-
-count.innerText=n
-
+  let n=0
+  for(let id in channels){
+    if(channels[id].readyState==="open") n++
+  }
+  count.innerText=n
 }
 
 function copyText(id){
-
-let text=document.getElementById(id)
-
-text.select()
-
-document.execCommand("copy")
-
+  let t=document.getElementById(id)
+  t.select()
+  document.execCommand("copy")
 }
 
 async function pasteText(id){
-
-let text=await navigator.clipboard.readText()
-
-document.getElementById(id).value=text
-
+  let text=await navigator.clipboard.readText()
+  document.getElementById(id).value=text
 }
 
+msg.addEventListener("keypress",function(e){
+  if(e.key==="Enter"){
+    e.preventDefault()
+    sendMsg()
+  }
+})
 </script>
 
 </body>
