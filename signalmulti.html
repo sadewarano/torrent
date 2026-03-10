@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>P2P Multi Chat Broadcast</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    
+
 <style>
 body{
 font-family:Arial;
@@ -62,9 +62,7 @@ gap:5px;
 }
 
 .chat{
-height:40vh;
-min-height:200px;
-max-height:60vh;
+height:45vh;
 overflow-y:auto;
 padding:10px;
 display:flex;
@@ -80,6 +78,12 @@ padding:8px 10px;
 border-radius:10px;
 font-size:14px;
 word-wrap:break-word;
+animation:fadeIn .2s ease;
+}
+
+@keyframes fadeIn{
+from{opacity:0;transform:translateY(5px);}
+to{opacity:1;transform:translateY(0);}
 }
 
 .me{
@@ -115,6 +119,22 @@ color:white;
 padding:10px 16px;
 border-radius:20px;
 }
+
+.netStatus{
+font-size:12px;
+background:#fff;
+padding:6px 10px;
+border-top:1px solid #ddd;
+display:flex;
+flex-wrap:wrap;
+gap:6px;
+}
+
+.netItem{
+background:#f2f2f2;
+padding:3px 7px;
+border-radius:10px;
+}
 </style>
 </head>
 
@@ -146,6 +166,8 @@ Peers connected: <b id="count">0</b>
 <button class="send" onclick="sendMsg()">Send</button>
 </div>
 
+<div id="netStatus" class="netStatus"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
 
 <script>
@@ -155,6 +177,7 @@ const myUser="User"+uid()
 let peers={}
 let channels={}
 let seenMsgs=new Set()
+let networkPeers={}
 
 function uid(){
 return "p"+Date.now()+Math.floor(Math.random()*10000)
@@ -241,7 +264,10 @@ pc.setRemoteDescription({type:"answer",sdp:sdp})
 function setupChannel(id){
 
 channels[id].onopen=()=>{
+
 updateCount()
+broadcastPeerList()
+
 }
 
 channels[id].onmessage=(e)=>{
@@ -250,14 +276,19 @@ let msgObj
 
 try{
 msgObj=JSON.parse(e.data)
-}
-catch{
-
+}catch{
 msgObj={
 id:uid(),
 text:e.data,
 sender:id
 }
+}
+
+if(msgObj.type==="peerlist"){
+
+networkPeers[msgObj.user]=msgObj.peers
+updateNetworkUI()
+return
 
 }
 
@@ -267,6 +298,7 @@ broadcastMessage(msgObj,id)
 
 channels[id].onclose=()=>{
 updateCount()
+updateNetworkUI()
 }
 
 }
@@ -285,6 +317,7 @@ sender:myUser
 broadcastMessage(msgObj)
 
 msg.value=""
+msg.focus()
 
 }
 
@@ -296,9 +329,7 @@ seenMsgs.add(msgObj.id)
 for(let id in channels){
 
 if(id!==idFrom && channels[id].readyState==="open"){
-
 channels[id].send(JSON.stringify(msgObj))
-
 }
 
 }
@@ -314,8 +345,55 @@ div.className="msg peer"
 div.innerText=msgObj.sender+" : "+msgObj.text
 
 chat.appendChild(div)
-
 chat.scrollTop=chat.scrollHeight
+
+}
+
+function broadcastPeerList(){
+
+let msg={
+type:"peerlist",
+user:myUser,
+peers:Object.keys(channels).length
+}
+
+for(let id in channels){
+
+if(channels[id].readyState==="open"){
+channels[id].send(JSON.stringify(msg))
+}
+
+}
+
+updateNetworkUI()
+
+}
+
+function updateNetworkUI(){
+
+netStatus.innerHTML=""
+
+for(let id in channels){
+
+if(channels[id].readyState==="open"){
+
+let div=document.createElement("span")
+div.className="netItem"
+div.innerText="🟢 "+id
+netStatus.appendChild(div)
+
+}
+
+}
+
+for(let user in networkPeers){
+
+let div=document.createElement("span")
+div.className="netItem"
+div.innerText="🔗 "+user+" ⇄ "+networkPeers[user]
+netStatus.appendChild(div)
+
+}
 
 }
 
@@ -344,7 +422,6 @@ async function pasteText(){
 let text=await navigator.clipboard.readText()
 
 connCode.value=text
-
 processCode()
 
 }
