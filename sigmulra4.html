@@ -161,14 +161,17 @@ function createOffer(){
 }
 
 function processCode(){
-  let code=partnerCode.value.trim()
-  let id=getId(code)
-  if(peers[id]) return   // <- tambahkan ini
-  knownPeers[id]=code
-  let type=code[id.length]
-  let data=code.slice(id.length+1)
-  let sdp=LZString.decompressFromEncodedURIComponent(data)
-  let pc=peers[id] || newPeer(id)
+  let code = partnerCode.value.trim()
+  let id = getId(code)
+  let type = code[id.length]
+  let data = code.slice(id.length+1)
+  let sdp = LZString.decompressFromEncodedURIComponent(data)
+  let pc = peers[id]
+  if(!pc){
+    pc = newPeer(id)
+  }
+
+  knownPeers[id] = code
   if(type==="o"){
     pc.setRemoteDescription({type:"offer",sdp:sdp})
     pc.createAnswer().then(a=>pc.setLocalDescription(a))
@@ -177,7 +180,6 @@ function processCode(){
         let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp)
         let answer=id+"a"+s
         myCode.value=answer
-        knownPeers[id]=code
       }
     }
   }
