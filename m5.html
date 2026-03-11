@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,180 +10,202 @@
 
 <style>
 
+/* ===== Base Layout ===== */
+
 body{
-margin:0;
-font-family:system-ui;
-background:#e5e7eb;
+  margin:0;
+  font-family:system-ui;
+  background:#e5e7eb;
 }
 
 .app{
-max-width:500px;
-margin:auto;
-height:100vh;
-display:flex;
-flex-direction:column;
-background:white;
-box-shadow:0 0 20px rgba(0,0,0,.1);
+  max-width:500px;
+  margin:auto;
+  height:100vh;
+
+  display:flex;
+  flex-direction:column;
+
+  background:white;
+  box-shadow:0 0 20px rgba(0,0,0,.1);
 }
 
 header{
-background:#111827;
-color:white;
-padding:14px;
-text-align:center;
-font-size:14px;
+  background:#111827;
+  color:white;
+  padding:14px;
+  text-align:center;
+  font-size:14px;
 }
 
+/* ===== Connection Panel ===== */
+
 .connectionPanel{
-padding:12px;
-border-bottom:1px solid #eee;
+  padding:12px;
+  border-bottom:1px solid #eee;
 }
 
 .row{
-display:flex;
-gap:6px;
-margin-top:6px;
+  display:flex;
+  gap:6px;
+  margin-top:6px;
 }
 
 .row input{
-flex:1;
-padding:10px;
-border:1px solid #ccc;
-border-radius:6px;
-font-size:13px;
+  flex:1;
+  padding:10px;
+  border:1px solid #ccc;
+  border-radius:6px;
+  font-size:13px;
 }
 
 .row button{
-padding:10px 12px;
-border:none;
-background:#2563eb;
-color:white;
-border-radius:6px;
-cursor:pointer;
+  padding:10px 12px;
+  border:none;
+  background:#2563eb;
+  color:white;
+  border-radius:6px;
+  cursor:pointer;
 }
 
+/* ===== Chat Area ===== */
+
 #chat{
-flex:1;
-overflow-y:auto;
-padding:12px;
-background:#f3f4f6;
-display:flex;
-flex-direction:column;
-gap:8px;
+  flex:1;
+  overflow-y:auto;
+  padding:12px;
+
+  background:#f3f4f6;
+
+  display:flex;
+  flex-direction:column;
+  gap:8px;
 }
 
 .message{
-max-width:75%;
-padding:8px 10px;
-border-radius:10px;
-font-size:14px;
-line-height:1.4;
+  max-width:75%;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:14px;
+  line-height:1.4;
 }
 
 .me{
-align-self:flex-end;
-background:#2563eb;
-color:white;
+  align-self:flex-end;
+  background:#2563eb;
+  color:white;
 }
 
 .other{
-align-self:flex-start;
-background:white;
-border:1px solid #ddd;
+  align-self:flex-start;
+  background:white;
+  border:1px solid #ddd;
 }
 
 .meta{
-font-size:10px;
-opacity:.6;
-margin-top:3px;
+  font-size:10px;
+  opacity:.6;
+  margin-top:3px;
 }
 
+/* ===== Input Area ===== */
+
 .chatInput{
-display:flex;
-gap:6px;
-padding:10px;
-border-top:1px solid #eee;
-background:white;
+  display:flex;
+  gap:6px;
+  padding:10px;
+
+  border-top:1px solid #eee;
+  background:white;
 }
 
 .chatInput input{
-flex:1;
-padding:10px;
-border:1px solid #ccc;
-border-radius:6px;
-font-size:14px;
+  flex:1;
+  padding:10px;
+  border:1px solid #ccc;
+  border-radius:6px;
+  font-size:14px;
 }
 
 .chatInput button{
-width:80px;
-border:none;
-background:#16a34a;
-color:white;
-border-radius:6px;
+  width:80px;
+  border:none;
+  background:#16a34a;
+  color:white;
+  border-radius:6px;
 }
 
 #myId{
-font-size:11px;
+  font-size:11px;
 }
 
 </style>
 </head>
 
+
 <body>
 
 <div class="app">
 
-<header>
-P2P Group Chat
-</header>
+<header>P2P Group Chat</header>
 
 <div class="connectionPanel">
 
-<div class="row">
-<input id="myId" readonly>
-<button id="copyBtn">Copy</button>
-</div>
+  <div class="row">
+    <input id="myId" readonly>
+    <button id="copyBtn">Copy</button>
+  </div>
 
-<div class="row">
-<input id="peerId" placeholder="Peer ID">
-<button id="pasteBtn">Paste</button>
-</div>
+  <div class="row">
+    <input id="peerId" placeholder="Peer ID">
+    <button id="pasteBtn">Paste</button>
+  </div>
 
 </div>
 
 <div id="chat"></div>
 
 <div class="chatInput">
-<input id="messageInput" placeholder="Tulis pesan...">
-<button id="sendBtn">Kirim</button>
+  <input id="messageInput" placeholder="Tulis pesan...">
+  <button id="sendBtn">Kirim</button>
 </div>
 
 </div>
+
 
 <script>
 
-let chatLog=[]
-let connections=[]
+/* ================================
+   STATE
+================================ */
 
-const peer=new Peer()
+let chatLog = []
+let connections = []
 
-const chat=document.getElementById("chat")
-const myId=document.getElementById("myId")
-const peerId=document.getElementById("peerId")
-const pasteBtn=document.getElementById("pasteBtn")
-const sendBtn=document.getElementById("sendBtn")
-const messageInput=document.getElementById("messageInput")
+const peer = new Peer()
 
-let username=""
+const chat = document.getElementById("chat")
+const myId = document.getElementById("myId")
+const peerId = document.getElementById("peerId")
+const pasteBtn = document.getElementById("pasteBtn")
+const sendBtn = document.getElementById("sendBtn")
+const messageInput = document.getElementById("messageInput")
 
-const animals=[
+let username = ""
+
+
+/* ================================
+   RANDOM USERNAME GENERATOR
+================================ */
+
+const animals = [
 "Kucing","Anjing","Kelinci","Burung","Kuda",
 "Kambing","Domba","Ayam","Bebek","Ikan",
 "Panda","Rubah","Singa","Harimau","Gajah",
 "Ular","KuraKura","Koala","Serigala","Elang"
 ]
 
-const colors=[
+const colors = [
 "Merah","Biru","Hijau","Kuning","Hitam",
 "Putih","Ungu","Oranye","Coklat","Pink",
 "Emas","Perak","Abu","Toska","Magenta"
@@ -190,183 +213,251 @@ const colors=[
 
 function generateName(){
 
-const animal=animals[Math.floor(Math.random()*animals.length)]
-const color=colors[Math.floor(Math.random()*colors.length)]
-const number=Math.floor(Math.random()*1000).toString().padStart(3,"0")
+  const animal = animals[Math.floor(Math.random()*animals.length)]
+  const color = colors[Math.floor(Math.random()*colors.length)]
+  const number = Math.floor(Math.random()*1000)
+                .toString()
+                .padStart(3,"0")
 
-return animal+color+number
-
+  return animal + color + number
 }
 
-let savedName=localStorage.getItem("chatUsername")
+let savedName = localStorage.getItem("chatUsername")
 
 if(!savedName){
-savedName=generateName()
-localStorage.setItem("chatUsername",savedName)
+  savedName = generateName()
+  localStorage.setItem("chatUsername",savedName)
 }
 
-username=savedName
+username = savedName
+
+
+/* ================================
+   UTILS
+================================ */
 
 function formatTime(t){
-const d=new Date(t)
-return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")
+
+  const d = new Date(t)
+
+  return (
+    d.getHours().toString().padStart(2,"0") +
+    ":" +
+    d.getMinutes().toString().padStart(2,"0")
+  )
 }
+
+
+/* ================================
+   RENDER CHAT
+================================ */
 
 function render(){
 
-chat.innerHTML=""
+  chat.innerHTML = ""
 
-chatLog.forEach(m=>{
+  chatLog.forEach(m => {
 
-const div=document.createElement("div")
-div.className="message "+(m.user===username?"me":"other")
+    const div = document.createElement("div")
 
-div.innerHTML=`
-<div>${m.user}: ${m.text}</div>
-<div class="meta">${formatTime(m.time)}</div>
-`
+    div.className =
+      "message " +
+      (m.user === username ? "me" : "other")
 
-chat.appendChild(div)
+    div.innerHTML = `
+      <div>${m.user}: ${m.text}</div>
+      <div class="meta">${formatTime(m.time)}</div>
+    `
 
-})
+    chat.appendChild(div)
 
-chat.scrollTop=chat.scrollHeight
+  })
 
+  chat.scrollTop = chat.scrollHeight
 }
+
+
+/* ================================
+   BROADCAST
+================================ */
 
 function broadcast(msg){
-connections.forEach(c=>{
-if(c.open) c.send(msg)
-})
-}
 
-sendBtn.onclick=()=>{
-
-const text=messageInput.value.trim()
-
-if(!text) return
-
-const msg={
-user:username,
-text:text,
-time:Date.now()
-}
-
-chatLog.push(msg)
-
-render()
-
-broadcast({type:"chat",msg})
-
-messageInput.value=""
+  connections.forEach(c=>{
+    if(c.open) c.send(msg)
+  })
 
 }
+
+
+/* ================================
+   SEND MESSAGE
+================================ */
+
+sendBtn.onclick = () => {
+
+  const text = messageInput.value.trim()
+
+  if(!text) return
+
+  const msg = {
+    user:username,
+    text:text,
+    time:Date.now()
+  }
+
+  chatLog.push(msg)
+
+  render()
+
+  broadcast({type:"chat",msg})
+
+  messageInput.value = ""
+
+}
+
+
+/* ================================
+   PEER EVENTS
+================================ */
 
 peer.on("open",id=>{
-myId.value=id
 
-chatLog.push({
-user:"System",
-text:"Peer siap: "+id,
-time:Date.now()
-})
+  myId.value = id
 
-render()
+  chatLog.push({
+    user:"System",
+    text:"Peer siap: "+id,
+    time:Date.now()
+  })
+
+  render()
 
 })
 
 peer.on("connection",conn=>{
-setup(conn)
+  setup(conn)
 })
 
-copyBtn.onclick=()=>{
-navigator.clipboard.writeText(myId.value)
-copyBtn.innerText="Copied"
-setTimeout(()=>copyBtn.innerText="Copy",1200)
-}
 
-pasteBtn.onclick=async()=>{
+/* ================================
+   COPY ID
+================================ */
 
-try{
+copyBtn.onclick = () => {
 
-const text=await navigator.clipboard.readText()
+  navigator.clipboard.writeText(myId.value)
 
-peerId.value=text.trim()
+  copyBtn.innerText = "Copied"
 
-autoConnect()
-
-}catch{
-
-alert("Clipboard tidak bisa diakses")
+  setTimeout(()=>{
+    copyBtn.innerText = "Copy"
+  },1200)
 
 }
 
+
+/* ================================
+   PASTE PEER ID
+================================ */
+
+pasteBtn.onclick = async () => {
+
+  try{
+
+    const text = await navigator.clipboard.readText()
+
+    peerId.value = text.trim()
+
+    autoConnect()
+
+  }catch{
+
+    alert("Clipboard tidak bisa diakses")
+
+  }
+
 }
+
+
+/* ================================
+   AUTO CONNECT
+================================ */
 
 function autoConnect(){
 
-const id=peerId.value.trim()
+  const id = peerId.value.trim()
 
-if(!id) return
+  if(!id) return
 
-if(id===myId.value){
-alert("Tidak bisa connect ke diri sendiri")
-return
-}
+  if(id === myId.value){
+    alert("Tidak bisa connect ke diri sendiri")
+    return
+  }
 
-const conn=peer.connect(id)
+  const conn = peer.connect(id)
 
-setup(conn)
+  setup(conn)
 
 }
 
 peerId.addEventListener("input",autoConnect)
 
+
+/* ================================
+   CONNECTION SETUP
+================================ */
+
 function setup(conn){
 
-connections.push(conn)
+  connections.push(conn)
 
-conn.on("open",()=>{
+  conn.on("open",()=>{
 
-chatLog.push({
-user:"System",
-text:"Terhubung: "+conn.peer,
-time:Date.now()
-})
+    chatLog.push({
+      user:"System",
+      text:"Terhubung: "+conn.peer,
+      time:Date.now()
+    })
 
-render()
+    render()
 
-conn.send({type:"sync",chatLog})
+    conn.send({
+      type:"sync",
+      chatLog
+    })
 
-})
+  })
 
-conn.on("data",data=>{
 
-if(data.type==="chat"){
-chatLog.push(data.msg)
-render()
-}
+  conn.on("data",data=>{
 
-if(data.type==="sync"){
-chatLog=data.chatLog
-render()
-}
+    if(data.type==="chat"){
+      chatLog.push(data.msg)
+      render()
+    }
 
-})
+    if(data.type==="sync"){
+      chatLog = data.chatLog
+      render()
+    }
 
-conn.on("close",()=>{
+  })
 
-chatLog.push({
-user:"System",
-text:"Peer terputus",
-time:Date.now()
-})
 
-render()
+  conn.on("close",()=>{
 
-connections=connections.filter(c=>c!==conn)
+    chatLog.push({
+      user:"System",
+      text:"Peer terputus",
+      time:Date.now()
+    })
 
-})
+    render()
+
+    connections = connections.filter(c=>c!==conn)
+
+  })
 
 }
 
