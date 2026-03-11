@@ -1,230 +1,184 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Share File via Torrent</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P Hypercore Chat Demo</title>
 
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <style>
 body{
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
-  padding:14px;
-  max-width:720px;
-  margin:auto;
-  background:#fafafa;
+  font-family:system-ui;
+  background:#f4f6f9;
+  margin:0;
 }
-h2{font-size:1.4em}
+
+header{
+  background:#111827;
+  color:white;
+  padding:20px;
+  text-align:center;
+}
+
+.container{
+  max-width:100%; /* full lebar di mobile */
+  margin:auto;
+  padding:10px;  /* padding lebih kecil di mobile */
+  box-sizing:border-box;
+}
+
+.card{
+  background:white;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:15px;
+  box-shadow:0 4px 12px rgba(0,0,0,.06);
+}
+
 input,button{
   width:100%;
-  padding:14px;
-  margin:8px 0;
-  font-size:1em;
-  border-radius:10px;
+  padding:12px;
+  margin-top:8px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  box-sizing:border-box;
+  font-size:16px;
 }
-input{border:1px solid #ccc}
+
 button{
+  background:#2563eb;
+  color:white;
   border:none;
   cursor:pointer;
-  font-weight:600;
 }
-.btn-seed{background:#4CAF50;color:#fff}
-.btn-copy{background:#2196F3;color:#fff}
-.btn-download{background:#FF9800;color:#fff}
-button:disabled{background:#aaa}
 
-.status{
-  background:#e3f2fd;
-  padding:12px;
-  border-radius:10px;
-  margin-top:10px;
-  font-size:0.95em;
+button:active{
+  background:#1e4fd8;
 }
-.stats{
-  background:#f1f8e9;
-  padding:12px;
-  border-radius:10px;
-  margin-top:10px;
-  font-size:0.9em;
-}
-.stats div{margin:4px 0}
 
-pre{
-  background:#111;
-  color:#0f0;
+#chat{
+  background:#0f172a;
+  color:white;
   padding:10px;
-  border-radius:10px;
-  height:200px;
-  overflow:auto;
-  font-size:12px;
+  height:250px; /* lebih kecil agar muat layar */
+  overflow-y:auto;
+  font-family:monospace;
+  border-radius:6px;
 }
-.footer{
-  text-align:center;
-  font-size:0.8em;
-  color:#666;
-  margin-top:10px;
+
+/* Responsive mobile */
+@media (max-width:600px){
+  .card{
+    padding:10px;
+    margin-bottom:10px;
+  }
+
+  input,button{
+    font-size:14px;
+    padding:10px;
+  }
+
+  #chat{
+    height:200px;
+  }
 }
 </style>
 </head>
+
 <body>
 
-<h2>📤 Share File via Torrent (P2P)</h2>
+<header>
+<h1>P2P Group Chat Demo</h1>
+<p>Konsep Hypercore append-only chat log</p>
+</header>
 
-<div class="status">
-Upload → Seed → Share Magnet → Download
+<div class="container">
+
+<div class="card">
+<h3>Identitas</h3>
+<input id="username" placeholder="Nama kamu">
+<p>Public Key:</p>
+<input id="myId" readonly>
+<p>Connect ke Peer:</p>
+<input id="peerId" placeholder="Masukkan Peer ID">
+<button id="connectBtn">Connect</button>
 </div>
 
-<input type="file" id="fileInput">
-
-<button class="btn-seed" onclick="seedFile()">🌱 Mulai Seeding</button>
-
-<input id="magnet" placeholder="Magnet URI muncul di sini">
-
-<button class="btn-copy" id="copyBtn" onclick="copyMagnet()" disabled>
-📋 Salin Magnet
-</button>
-
-<button class="btn-download" onclick="download()">⬇️ Download dari Magnet</button>
-
-<div id="info" class="status">ℹ️ Belum ada aktivitas</div>
-
-<!-- ===================== -->
-<!-- SEEDER STATISTICS -->
-<!-- ===================== -->
-<div class="stats" id="stats">
-  <strong>📊 Status Seeder</strong>
-  <div>🟢 Status: <span id="seedStatus">Tidak aktif</span></div>
-  <div>👥 Peer terhubung: <span id="peerCount">0</span></div>
-  <div>📦 Jumlah file: <span id="fileCount">0</span></div>
-  <div>⬆️ Upload total: <span id="uploaded">0 KB</span></div>
-  <div>⚡ Upload speed: <span id="upSpeed">0 KB/s</span></div>
+<div class="card">
+<h3>Chat Group</h3>
+<div id="chat"></div>
+<input id="messageInput" placeholder="Tulis pesan...">
+<button id="sendBtn">Kirim</button>
 </div>
 
-<pre id="log"></pre>
-
-<div class="footer">
-WebTorrent · Browser P2P · Mobile Friendly
 </div>
 
 <script>
-const client = new WebTorrent();
-let currentTorrent = null;
-let uploadedBytes = 0;
+let chatLog=[]
+let connections=[]
 
-const log = msg => {
-  const p = document.getElementById("log");
-  p.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
-  p.scrollTop = p.scrollHeight;
-};
+const peer=new Peer()
 
-function format(bytes){
-  if(bytes > 1024*1024)
-    return (bytes/1024/1024).toFixed(2) + " MB";
-  if(bytes > 1024)
-    return (bytes/1024).toFixed(1) + " KB";
-  return bytes + " B";
+const chat=document.getElementById("chat")
+const username=document.getElementById("username")
+const myId=document.getElementById("myId")
+const peerId=document.getElementById("peerId")
+const connectBtn=document.getElementById("connectBtn")
+const sendBtn=document.getElementById("sendBtn")
+const messageInput=document.getElementById("messageInput")
+
+function render(){
+  chat.innerText = chatLog.map(m=>`${m.user}: ${m.text}`).join("\n")
+  chat.scrollTop = chat.scrollHeight
 }
 
-// =======================
-// COPY MAGNET
-// =======================
-function copyMagnet(){
-  const magnet = document.getElementById("magnet").value;
-  if(!magnet) return;
-
-  navigator.clipboard.writeText(magnet);
-  log("📋 Magnet disalin");
-  document.getElementById("info").textContent =
-    "📋 Magnet berhasil disalin";
+function broadcast(msg){
+  connections.forEach(c=>{
+    if(c.open) c.send(msg)
+  })
 }
 
-// =======================
-// SEED FILE
-// =======================
-function seedFile(){
-  const input = document.getElementById("fileInput");
-  if(!input.files.length){
-    alert("Pilih file dulu");
-    return;
-  }
-
-  const file = input.files[0];
-  uploadedBytes = 0;
-
-  log("📁 File: " + file.name);
-
-  document.getElementById("info").textContent =
-    "🌱 Membuat torrent...";
-
-  client.seed(file, torrent=>{
-    currentTorrent = torrent;
-
-    document.getElementById("magnet").value = torrent.magnetURI;
-    document.getElementById("copyBtn").disabled = false;
-
-    document.getElementById("seedStatus").textContent = "AKTIF";
-    document.getElementById("fileCount").textContent =
-      torrent.files.length;
-
-    log("🧲 Magnet siap");
-    log("🌱 Seeding aktif");
-
-    torrent.on("wire", ()=>{
-      document.getElementById("peerCount").textContent =
-        torrent.numPeers;
-      log("🔗 Peer terhubung ("+torrent.numPeers+")");
-    });
-
-    torrent.on("upload", bytes=>{
-      uploadedBytes += bytes;
-      document.getElementById("uploaded").textContent =
-        format(uploadedBytes);
-      document.getElementById("upSpeed").textContent =
-        format(torrent.uploadSpeed) + "/s";
-    });
-  });
+sendBtn.onclick = ()=>{
+  const text = messageInput.value.trim()
+  if(!text) return
+  const msg = {user: username.value||"anon", text, time: Date.now()}
+  chatLog.push(msg)
+  render()
+  broadcast({type:"chat", msg})
+  messageInput.value = ""
 }
 
-// =======================
-// DOWNLOAD
-// =======================
-function download(){
-  const magnet = document.getElementById("magnet").value.trim();
-  if(!magnet){
-    alert("Paste magnet dulu");
-    return;
-  }
+peer.on("open", id=>{
+  myId.value = id
+  chatLog.push({user:"System", text:`Peer siap dengan ID: ${id}`})
+  render()
+})
 
-  client.add(magnet, torrent=>{
-    log("⬇️ Download dimulai");
+connectBtn.onclick = ()=>{
+  const conn = peer.connect(peerId.value)
+  setup(conn)
+}
 
-    torrent.on("download", ()=>{
-      const p = Math.round(torrent.progress * 100);
-      document.getElementById("info").textContent =
-        `⬇️ Download ${p}%`;
-    });
+peer.on("connection", conn=>{
+  setup(conn)
+})
 
-    torrent.on("done", ()=>{
-      log("✅ Download selesai");
-
-      torrent.files.forEach(file=>{
-        file.getBlob((err,blob)=>{
-          const url=URL.createObjectURL(blob);
-          const a=document.createElement("a");
-          a.href=url;
-          a.download=file.name;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          log("💾 File tersimpan: "+file.name);
-        });
-      });
-
-      document.getElementById("info").textContent =
-        "✅ Download selesai & file tersimpan";
-    });
-  });
+function setup(conn){
+  connections.push(conn)
+  conn.on("open", ()=>{
+    chatLog.push({user:"System", text:`Terhubung dengan ${conn.peer}`})
+    render()
+    conn.send({type:"sync", chatLog})
+  })
+  conn.on("data", data=>{
+    if(data.type==="chat"){ chatLog.push(data.msg); render() }
+    if(data.type==="sync"){ chatLog=data.chatLog; render() }
+  })
+  conn.on("close", ()=>{
+    chatLog.push({user:"System", text:`Peer ${conn.peer} terputus`})
+    render()
+    connections = connections.filter(c => c !== conn)
+  })
 }
 </script>
 
