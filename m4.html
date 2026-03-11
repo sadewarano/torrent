@@ -1,258 +1,321 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>WebTorrent Seeder Professional</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<title>P2P Hypercore Chat Demo</title>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <style>
-:root{
-  --idle:#ffca28;
-  --peer:#29b6f6;
-  --upload:#66bb6a;
-  --bg:#0d1117;
-  --panel:#161b22;
-  --text:#e6edf3;
-}
 body{
-  font-family:system-ui,Segoe UI,Arial,sans-serif;
+  font-family:system-ui;
+  background:#f4f6f9;
   margin:0;
-  background:var(--bg);
-  color:var(--text);
 }
-.wrapper{
-  max-width:900px;
+
+header{
+  background:#111827;
+  color:white;
+  padding:20px;
+  text-align:center;
+}
+
+.container{
+  max-width:100%; /* full lebar di mobile */
   margin:auto;
-  padding:16px;
+  padding:10px;  /* padding lebih kecil di mobile */
+  box-sizing:border-box;
 }
-h1{
-  font-size:1.4em;
-  margin-bottom:10px;
-}
-.panel{
-  background:var(--panel);
-  border-radius:14px;
-  padding:14px;
-  margin-bottom:14px;
-}
-.row{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-.col{
-  flex:1;
-  min-width:180px;
+
+.card{
+  background:white;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:15px;
+  box-shadow:0 4px 12px rgba(0,0,0,.06);
 }
 
 input,button{
   width:100%;
-  padding:14px;
-  border-radius:12px;
-  border:none;
-  font-size:1em;
-}
-input{background:#0d1117;color:#fff;border:1px solid #30363d}
-button{cursor:pointer;font-weight:600}
-.seed{background:#2ea043;color:#fff}
-.copy{background:#1f6feb;color:#fff}
-.down{background:#d29922;color:#000}
-button:disabled{opacity:.5}
-
-/* STATUS BAR */
-.statusBar{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  font-size:.95em;
-}
-.led{
-  width:12px;
-  height:12px;
-  border-radius:50%;
-  background:var(--idle);
-  box-shadow:0 0 10px var(--idle);
-}
-.led.peer{background:var(--peer);box-shadow:0 0 10px var(--peer)}
-.led.upload{background:var(--upload);box-shadow:0 0 12px var(--upload)}
-
-.stats div{
-  margin:4px 0;
-  font-size:.9em;
-}
-
-pre{
-  background:#010409;
-  border:1px solid #30363d;
   padding:12px;
-  border-radius:12px;
-  height:230px;
-  overflow:auto;
-  font-size:12px;
-  color:#8b949e;
-}
-.footer{
-  text-align:center;
-  font-size:.75em;
-  opacity:.6;
+  margin-top:8px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  box-sizing:border-box;
+  font-size:16px;
 }
 
-/* heartbeat */
-@keyframes pulse{
-  0%{opacity:.4}
-  50%{opacity:1}
-  100%{opacity:.4}
+button{
+  background:#2563eb;
+  color:white;
+  border:none;
+  cursor:pointer;
 }
-.heartbeat{
-  animation:pulse 1.6s infinite;
+
+button:active{
+  background:#1e4fd8;
+}
+
+#chat{
+  background:#0f172a;
+  color:white;
+  padding:10px;
+  height:40vh;
+  overflow-y:auto;
+  font-family:monospace;
+  border-radius:6px;
+}
+
+.copyRow{
+display:flex;
+align-items:center;
+gap:6px;
+}
+
+.copyRow p{
+margin:0;
+white-space:nowrap;
+}
+
+.copyRow input{
+flex:1;
+}
+
+.copyRow button{
+width:70px;
+}
+
+.connectRow{
+display:flex;
+align-items:center;
+gap:6px;
+margin-top:8px;
+}
+
+.connectRow p{
+margin:0;
+white-space:nowrap;
+}
+
+.connectRow input{
+flex:1;
+}
+
+.connectRow button{
+width:90px;
+}
+
+input{
+min-width:0;
+}
+
+#myId{
+font-size:12px;
+}
+
+/* Responsive mobile */
+@media (max-width:600px){
+
+header{
+padding:14px;
+}
+
+h1{
+font-size:18px;
+}
+
+.container{
+padding:8px;
+}
+
+.card{
+padding:12px;
+}
+
+input,button{
+font-size:15px;
+padding:10px;
+}
+
+#chat{
+height:45vh;
+}
+
 }
 </style>
 </head>
+
 <body>
 
-<div class="wrapper">
-<h1>🌱 WebTorrent Seeder · Professional Mode</h1>
+<header>
+<h1>P2P Group Chat Demo</h1>
+<p>Konsep Hypercore append-only chat log</p>
+</header>
 
-<div class="panel statusBar">
-  <div id="led" class="led"></div>
-  <div id="mainStatus" class="heartbeat">
-    Idle · Belum ada aktivitas
-  </div>
+<div class="container">
+
+<div class="card">
+
+<div class="copyRow">
+<p>Public Key:</p>
+<input id="myId" readonly>
+<button id="copyBtn">Copy</button>
 </div>
 
-<div class="panel">
-  <input type="file" id="fileInput">
-  <div class="row">
-    <button class="seed col" onclick="seedFile()">Mulai Seeding</button>
-    <button class="down col" onclick="download()">Download Magnet</button>
-  </div>
-  <input id="magnet" placeholder="Magnet URI">
-  <button class="copy" id="copyBtn" onclick="copyMagnet()" disabled>
-    Salin Magnet
-  </button>
+<div class="connectRow">
+<p>Connect:</p>
+<input id="peerId" placeholder="Peer ID">
+<button id="pasteBtn">Paste</button>
 </div>
 
-<div class="panel stats">
-  <strong>📊 Seeder Dashboard</strong>
-  <div>Mode: <span id="mode">Idle</span></div>
-  <div>Peer: <span id="peers">0</span></div>
-  <div>Upload total: <span id="uploaded">0 B</span></div>
-  <div>Speed: <span id="speed">0 B/s</span></div>
-  <div>Waktu seeding: <span id="uptime">0s</span></div>
 </div>
 
-<div class="panel">
-  <strong>🖥 Seeder Console</strong>
-  <pre id="log">[SYSTEM] Seeder siap
-Menunggu perintah...
-  </pre>
+<div class="card">
+<h3>Chat Group</h3>
+<div id="chat"></div>
+<input id="messageInput" placeholder="Tulis pesan...">
+<button id="sendBtn">Kirim</button>
 </div>
 
-<div class="footer">
-  Selama tab terbuka, browser ini berfungsi sebagai seeder 🌱
-</div>
 </div>
 
 <script>
-const client = new WebTorrent();
-let torrent=null;
-let uploaded=0;
-let startTime=0;
-let idleTicker=null;
+let chatLog=[]
+let connections=[]
 
-const el = id=>document.getElementById(id);
-const log = m=>{
-  el("log").textContent+=`[${new Date().toLocaleTimeString()}] ${m}\n`;
-  el("log").scrollTop=el("log").scrollHeight;
-};
+const peer=new Peer()
 
-const fmt=b=>{
-  if(b>1024*1024) return (b/1024/1024).toFixed(2)+" MB";
-  if(b>1024) return (b/1024).toFixed(1)+" KB";
-  return b+" B";
-};
+const chat=document.getElementById("chat")
+let username=""
+const myId=document.getElementById("myId")
+const peerId=document.getElementById("peerId")
+const pasteBtn=document.getElementById("pasteBtn")
+const sendBtn=document.getElementById("sendBtn")
+const messageInput=document.getElementById("messageInput")
 
-function setStatus(text,mode="idle"){
-  el("mainStatus").textContent=text;
-  el("mode").textContent=mode.toUpperCase();
-  el("led").className="led "+(mode==="peer"?"peer":mode==="upload"?"upload":"");
+// ===== AUTO GENERATE USERNAME =====
+
+const animals=[
+"Kucing","Anjing","Kelinci","Burung","Kuda",
+"Kambing","Domba","Ayam","Bebek","Ikan",
+"Panda","Rubah","Singa","Harimau","Gajah",
+"Ular","KuraKura","Koala","Serigala","Elang"
+]
+
+const colors=[
+"Merah","Biru","Hijau","Kuning","Hitam",
+"Putih","Ungu","Oranye","Coklat","Pink",
+"Emas","Perak","Abu","Toska","Magenta"
+]
+
+function generateName(){
+
+const animal=animals[Math.floor(Math.random()*animals.length)]
+const color=colors[Math.floor(Math.random()*colors.length)]
+const number=Math.floor(Math.random()*1000).toString().padStart(3,"0")
+
+return animal+color+number
+
 }
 
-function startUptime(){
-  startTime=Date.now();
-  setInterval(()=>{
-    if(startTime){
-      el("uptime").textContent=
-        Math.floor((Date.now()-startTime)/1000)+"s";
-    }
-  },1000);
+// cek apakah sudah ada di localStorage
+let savedName=localStorage.getItem("chatUsername")
+
+if(!savedName){
+savedName=generateName()
+localStorage.setItem("chatUsername",savedName)
 }
 
-function startIdle(){
-  idleTicker=setInterval(()=>{
-    if(torrent && torrent.numPeers===0){
-      log("⏳ Seeder aktif · Menunggu peer");
-    }
-  },15000);
+username=savedName
+
+function render(){
+  chat.innerText = chatLog.map(m=>`${m.user}: ${m.text}`).join("\n")
+  chat.scrollTop = chat.scrollHeight
 }
 
-function seedFile(){
-  const f=el("fileInput").files[0];
-  if(!f) return alert("Pilih file dulu");
-
-  client.seed(f,t=>{
-    torrent=t;
-    startUptime();
-    setStatus("🌱 Seeder aktif · Menunggu peer","idle");
-    log("Seeding dimulai: "+f.name);
-
-    el("magnet").value=t.magnetURI;
-    el("copyBtn").disabled=false;
-
-    startIdle();
-    bindStats();
-  });
+function broadcast(msg){
+  connections.forEach(c=>{
+    if(c.open) c.send(msg)
+  })
 }
 
-function download(){
-  const m=el("magnet").value.trim();
-  if(!m) return alert("Paste magnet dulu");
-
-  client.add(m,t=>{
-    torrent=t;
-    startUptime();
-    setStatus("⬇️ Download berlangsung","peer");
-    log("Download dimulai");
-
-    t.on("done",()=>{
-      setStatus("🌱 Download selesai · Ikut seeding","idle");
-      log("Download selesai · Beralih ke seeder");
-      startIdle();
-    });
-
-    bindStats();
-  });
+sendBtn.onclick = ()=>{
+  const text = messageInput.value.trim()
+  if(!text) return
+  const msg = {user: username||"anon", text, time: Date.now()}
+  chatLog.push(msg)
+  render()
+  broadcast({type:"chat", msg})
+  messageInput.value = ""
 }
 
-function bindStats(){
-  torrent.on("wire",()=>{
-    el("peers").textContent=torrent.numPeers;
-    setStatus("🔗 Peer terhubung","peer");
-    log("Peer terhubung");
-  });
+peer.on("open", id=>{
+  myId.value = id
+  chatLog.push({user:"System", text:`Peer siap dengan ID: ${id}`})
+  render()
+})
 
-  torrent.on("upload",b=>{
-    uploaded+=b;
-    el("uploaded").textContent=fmt(uploaded);
-    el("speed").textContent=fmt(torrent.uploadSpeed)+"/s";
-    setStatus("⬆️ Upload aktif","upload");
-  });
+
+peer.on("connection", conn=>{
+  setup(conn)
+})
+
+const copyBtn=document.getElementById("copyBtn")
+
+copyBtn.onclick=()=>{
+navigator.clipboard.writeText(myId.value)
+copyBtn.innerText="Copied"
+setTimeout(()=>{
+copyBtn.innerText="Copy"
+},1500)
 }
 
-function copyMagnet(){
-  navigator.clipboard.writeText(el("magnet").value);
-  log("Magnet disalin");
+pasteBtn.onclick = async ()=>{
+try{
+const text = await navigator.clipboard.readText()
+peerId.value = text.trim()
+autoConnect()
+}catch(err){
+alert("Clipboard tidak bisa diakses")
+}
+}
+
+function autoConnect(){
+
+const id = peerId.value.trim()
+
+if(!id) return
+
+if(id === myId.value){
+alert("Tidak bisa connect ke diri sendiri")
+return
+}
+
+const conn = peer.connect(id)
+
+setup(conn)
+
+}
+
+peerId.addEventListener("input", autoConnect)
+
+function setup(conn){
+  connections.push(conn)
+  conn.on("open", ()=>{
+    chatLog.push({user:"System", text:`Terhubung dengan ${conn.peer}`})
+    render()
+    conn.send({type:"sync", chatLog})
+  })
+  conn.on("data", data=>{
+    if(data.type==="chat"){ chatLog.push(data.msg); render() }
+    if(data.type==="sync"){ chatLog=data.chatLog; render() }
+  })
+  conn.on("close", ()=>{
+    chatLog.push({user:"System", text:`Peer ${conn.peer} terputus`})
+    render()
+    connections = connections.filter(c => c !== conn)
+  })
 }
 </script>
 
