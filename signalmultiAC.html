@@ -2,60 +2,386 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>P2P Chat Ultra Minimal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P Hypercore Chat Demo</title>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
 <style>
-body{font-family:Arial;margin:0;padding:0;display:flex;flex-direction:column;height:100vh}
-header{background:#075E54;color:#fff;text-align:center;padding:10px}
-textarea,input,button{font-size:14px;margin:5px}
-.chat{flex:1;overflow-y:auto;background:#f9f9f9;padding:5px}
-.msg{margin:2px;padding:4px;border-radius:5px}
-.me{background:#dcf8c6;text-align:right}
-.peer{background:#fff;text-align:left}
+body{
+  font-family:system-ui;
+  background:#f4f6f9;
+  margin:0;
+}
+
+header{
+  background:#111827;
+  color:white;
+  padding:20px;
+  text-align:center;
+}
+
+.container{
+  max-width:100%;
+  margin:auto;
+  padding:10px;
+  box-sizing:border-box;
+}
+
+.card{
+  background:white;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:15px;
+  box-shadow:0 4px 12px rgba(0,0,0,.06);
+}
+
+input,button{
+  width:100%;
+  padding:12px;
+  margin-top:8px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  box-sizing:border-box;
+  font-size:16px;
+}
+
+button{
+  background:#2563eb;
+  color:white;
+  border:none;
+  cursor:pointer;
+}
+
+button:active{
+  background:#1e4fd8;
+}
+
+#chat{
+  background:#0f172a;
+  color:white;
+  padding:10px;
+  height:40vh;
+  overflow-y:auto;
+  font-family:monospace;
+  border-radius:6px;
+}
+
+.copyRow{
+display:flex;
+align-items:center;
+gap:6px;
+}
+
+.copyRow p{
+margin:0;
+white-space:nowrap;
+}
+
+.copyRow input{
+flex:1;
+}
+
+.copyRow button{
+width:70px;
+}
+
+.connectRow{
+display:flex;
+align-items:center;
+gap:6px;
+margin-top:8px;
+}
+
+.connectRow p{
+margin:0;
+white-space:nowrap;
+}
+
+.connectRow input{
+flex:1;
+}
+
+.connectRow button{
+width:90px;
+}
+
+input{
+min-width:0;
+}
+
+#myId{
+font-size:12px;
+}
+
+@media (max-width:600px){
+
+header{padding:14px;}
+h1{font-size:18px;}
+.container{padding:8px;}
+.card{padding:12px;}
+
+input,button{
+font-size:15px;
+padding:10px;
+}
+
+#chat{height:45vh;}
+
+}
 </style>
 </head>
+
 <body>
-<header>P2P Chat Ultra Minimal</header>
-<textarea id="conn" placeholder="Offer / Answer"></textarea>
-<button onclick="gen()">Generate Offer</button>
-<button onclick="proc()">Connect</button>
-<div class="chat" id="chat"></div>
-<input id="msg" placeholder="Type..." onkeypress="if(event.key==='Enter'){send()}">
-<script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
+
+<header>
+<h1>P2P Group Chat Demo</h1>
+<p>Konsep Hypercore append-only chat log</p>
+</header>
+
+<div class="container">
+
+<div class="card">
+
+<div class="copyRow">
+<p>Public Key:</p>
+<input id="myId" readonly>
+<button id="copyBtn">Copy</button>
+<button id="shareBtn">Share</button>
+</div>
+
+<div class="connectRow">
+<p>Connect:</p>
+<input id="peerId" placeholder="Peer ID">
+<button id="pasteBtn">Paste</button>
+<button id="ambilBtn">Ambil</button>
+</div>
+
+</div>
+
+<div class="card">
+<h3>Chat Group</h3>
+<div id="chat"></div>
+<input id="messageInput" placeholder="Tulis pesan...">
+<button id="sendBtn">Kirim</button>
+</div>
+
+</div>
+
 <script>
-const id="p"+Date.now()+Math.floor(Math.random()*9999);
-let pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]}),dc,chs={}; 
-function gen(){
-  dc=pc.createDataChannel("c");
-  dc.onmessage=e=>add(e.data,'peer');
-  pc.createOffer().then(o=>pc.setLocalDescription(o));
-  pc.onicecandidate=e=>{
-    if(!e.candidate){
-      let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
-      document.getElementById('conn').value=id+"o"+s;
-    }
-  };
+
+let chatLog=[]
+let connections=[]
+
+const peer=new Peer()
+
+const chat=document.getElementById("chat")
+let username=""
+const myId=document.getElementById("myId")
+const peerId=document.getElementById("peerId")
+
+const pasteBtn=document.getElementById("pasteBtn")
+const sendBtn=document.getElementById("sendBtn")
+const messageInput=document.getElementById("messageInput")
+
+const shareBtn=document.getElementById("shareBtn")
+const ambilBtn=document.getElementById("ambilBtn")
+
+const URL_GAS="PASTE_URL_GAS_DISINI"
+
+/* ===== USERNAME ===== */
+
+const animals=[
+"Kucing","Anjing","Kelinci","Burung","Kuda",
+"Kambing","Domba","Ayam","Bebek","Ikan",
+"Panda","Rubah","Singa","Harimau","Gajah",
+"Ular","KuraKura","Koala","Serigala","Elang"
+]
+
+const colors=[
+"Merah","Biru","Hijau","Kuning","Hitam",
+"Putih","Ungu","Oranye","Coklat","Pink",
+"Emas","Perak","Abu","Toska","Magenta"
+]
+
+function generateName(){
+
+const animal=animals[Math.floor(Math.random()*animals.length)]
+const color=colors[Math.floor(Math.random()*colors.length)]
+const number=Math.floor(Math.random()*1000).toString().padStart(3,"0")
+
+return animal+color+number
+
 }
-function proc(){
-  let code=document.getElementById('conn').value.trim();
-  let pid=code.match(/^p\d+/)[0],type=code[pid.length],sdp=LZString.decompressFromEncodedURIComponent(code.slice(pid.length+1));
-  pc.setRemoteDescription({type:type==='o'?'offer':'answer',sdp:sdp});
-  if(type==='o'){
-    pc.createAnswer().then(a=>pc.setLocalDescription(a));
-    pc.onicecandidate=e=>{
-      if(!e.candidate){
-        let s=LZString.compressToEncodedURIComponent(pc.localDescription.sdp);
-        document.getElementById('conn').value=id+"a"+s;
-      }
-    };
-  }
-  pc.ondatachannel=e=>{dc=e.channel;dc.onmessage=ev=>add(ev.data,'peer')};
+
+let savedName=localStorage.getItem("chatUsername")
+
+if(!savedName){
+savedName=generateName()
+localStorage.setItem("chatUsername",savedName)
 }
-function send(){
-  let m=document.getElementById('msg').value;
-  if(!m) return;
-  dc?.send(m); add(m,'me'); document.getElementById('msg').value='';
+
+username=savedName
+
+function render(){
+chat.innerText = chatLog.map(m=>`${m.user}: ${m.text}`).join("\n")
+chat.scrollTop = chat.scrollHeight
 }
-function add(t,c){let d=document.createElement('div');d.className='msg '+c;d.innerText=t;document.getElementById('chat').appendChild(d);}
+
+function broadcast(msg){
+connections.forEach(c=>{
+if(c.open) c.send(msg)
+})
+}
+
+sendBtn.onclick = ()=>{
+const text = messageInput.value.trim()
+if(!text) return
+
+const msg = {user: username||"anon", text, time: Date.now()}
+
+chatLog.push(msg)
+render()
+
+broadcast({type:"chat", msg})
+
+messageInput.value = ""
+}
+
+peer.on("open", id=>{
+myId.value = id
+chatLog.push({user:"System", text:`Peer siap dengan ID: ${id}`})
+render()
+})
+
+peer.on("connection", conn=>{
+setup(conn)
+})
+
+const copyBtn=document.getElementById("copyBtn")
+
+copyBtn.onclick=()=>{
+navigator.clipboard.writeText(myId.value)
+copyBtn.innerText="Copied"
+setTimeout(()=>{
+copyBtn.innerText="Copy"
+},1500)
+}
+
+/* ===== SHARE KE GAS ===== */
+
+shareBtn.onclick=()=>{
+
+fetch(URL_GAS,{
+method:"POST",
+body:JSON.stringify({
+kode:myId.value,
+time:Date.now()
+})
+})
+
+shareBtn.innerText="Shared"
+
+setTimeout(()=>{
+shareBtn.innerText="Share"
+},1500)
+
+}
+
+/* ===== AMBIL TERAKHIR DARI GAS ===== */
+
+ambilBtn.onclick=()=>{
+
+fetch(URL_GAS)
+.then(r=>r.json())
+.then(d=>{
+
+const last=d[d.length-1]
+
+if(!last)return
+
+navigator.clipboard.writeText(last.kode)
+
+ambilBtn.innerText="Copied"
+
+setTimeout(()=>{
+ambilBtn.innerText="Ambil"
+},1500)
+
+})
+
+}
+
+/* ===== PASTE ===== */
+
+pasteBtn.onclick = async ()=>{
+try{
+const text = await navigator.clipboard.readText()
+peerId.value = text.trim()
+autoConnect()
+}catch(err){
+alert("Clipboard tidak bisa diakses")
+}
+}
+
+function autoConnect(){
+
+const id = peerId.value.trim()
+
+if(!id) return
+
+if(id === myId.value){
+alert("Tidak bisa connect ke diri sendiri")
+return
+}
+
+const conn = peer.connect(id)
+
+setup(conn)
+
+}
+
+peerId.addEventListener("input", autoConnect)
+
+function setup(conn){
+
+connections.push(conn)
+
+conn.on("open", ()=>{
+
+chatLog.push({user:"System", text:`Terhubung dengan ${conn.peer}`})
+render()
+
+conn.send({type:"sync", chatLog})
+
+})
+
+conn.on("data", data=>{
+
+if(data.type==="chat"){
+chatLog.push(data.msg)
+render()
+}
+
+if(data.type==="sync"){
+chatLog=data.chatLog
+render()
+}
+
+})
+
+conn.on("close", ()=>{
+
+chatLog.push({user:"System", text:`Peer ${conn.peer} terputus`})
+render()
+
+connections = connections.filter(c => c !== conn)
+
+})
+
+}
+
 </script>
+
 </body>
 </html>
