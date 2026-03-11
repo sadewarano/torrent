@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>P2P Hypercore Chat Demo</title>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -60,7 +61,7 @@ button:active{
   background:#0f172a;
   color:white;
   padding:10px;
-  height:250px; /* lebih kecil agar muat layar */
+  height:40vh;
   overflow-y:auto;
   font-family:monospace;
   border-radius:6px;
@@ -105,25 +106,42 @@ flex:1;
 width:90px;
 }
 
+input{
+min-width:0;
+}
+
 #myId{
 font-size:12px;
 }
 
 /* Responsive mobile */
 @media (max-width:600px){
-  .card{
-    padding:10px;
-    margin-bottom:10px;
-  }
 
-  input,button{
-    font-size:14px;
-    padding:10px;
-  }
+header{
+padding:14px;
+}
 
-  #chat{
-    height:200px;
-  }
+h1{
+font-size:18px;
+}
+
+.container{
+padding:8px;
+}
+
+.card{
+padding:12px;
+}
+
+input,button{
+font-size:15px;
+padding:10px;
+}
+
+#chat{
+height:45vh;
+}
+
 }
 </style>
 </head>
