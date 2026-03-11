@@ -66,6 +66,20 @@ button:active{
   border-radius:6px;
 }
 
+.copyRow{
+display:flex;
+gap:6px;
+}
+
+.copyRow input{
+flex:1;
+}
+
+.copyRow button{
+width:80px;
+padding:10px;
+}
+
 /* Responsive mobile */
 @media (max-width:600px){
   .card{
@@ -97,7 +111,12 @@ button:active{
 <div class="card">
 <h3>Identitas</h3>
 <p>Public Key:</p>
+
+<div class="copyRow">
 <input id="myId" readonly>
+<button id="copyBtn">Copy</button>
+</div>
+
 <p>Connect ke Peer:</p>
 <input id="peerId" placeholder="Masukkan Peer ID">
 <button id="connectBtn">Connect</button>
@@ -196,6 +215,20 @@ connectBtn.onclick = ()=>{
 peer.on("connection", conn=>{
   setup(conn)
 })
+
+const copyBtn=document.getElementById("copyBtn")
+
+copyBtn.onclick=()=>{
+
+navigator.clipboard.writeText(myId.value)
+
+copyBtn.innerText="Copied"
+
+setTimeout(()=>{
+copyBtn.innerText="Copy"
+},1500)
+
+}
 
 function setup(conn){
   connections.push(conn)
