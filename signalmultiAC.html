@@ -310,16 +310,27 @@ shareBtn.innerText="Share"
 ambilBtn.onclick = async () => {
   try {
     const res = await fetch(API);
-    const d = await res.json();
-    if (!d || !d.kode) return;
-    await navigator.clipboard.writeText(d.kode);
-    peerId.value = d.kode;
+    const data = await res.json();
+    // cek kalau data valid
+    if (!data || !data.kode) {
+      alert("Belum ada data di GAS");
+      return;
+    }
+    const lastPeerId = data.kode;
+    // jangan connect ke diri sendiri
+    if (lastPeerId === myId.value) return;
+    // salin ke clipboard
+    await navigator.clipboard.writeText(lastPeerId);
+    // isi input peerId dan auto connect
+    peerId.value = lastPeerId;
     autoConnect();
+    // feedback tombol
     ambilBtn.innerText = "Copied";
-    setTimeout(()=>ambilBtn.innerText="Ambil",1500);
-  } catch(err) {
-    console.error(err);
-    alert("Gagal ambil data");
+    setTimeout(() => ambilBtn.innerText = "Ambil", 1500);
+
+  } catch (err) {
+    console.error("Gagal ambil data dari GAS:", err);
+    alert("Gagal ambil data dari GAS. Periksa koneksi atau publish GAS");
   }
 };
 
