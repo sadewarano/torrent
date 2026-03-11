@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>P2P Mobile Ready</title>
+<title>P2P Mobile Ready - Update Share</title>
 <style>
   body {
     margin: 0;
@@ -88,6 +88,7 @@
   <div class="btn-group">
     <button id="kirimBtn">Kirim</button>
     <button id="hapusBtn">Hapus Semua</button>
+    <button id="shareBtn">Share</button>
   </div>
 
   <button id="ambilBtn">Ambil Peer ID</button>
@@ -107,74 +108,93 @@
 const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
 
 // ===== Fungsi =====
-function kirim() {
+async function kirim() {
   const kodeInput = document.getElementById("kode");
   if(!kodeInput.value.trim()) return;
-
-  fetch(API, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({kode: kodeInput.value.trim()})
-  })
-  .then(() => { kodeInput.value = ""; })
-  .catch(err => console.error(err));
+  try {
+    await fetch(API, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({kode: kodeInput.value.trim()})
+    });
+    kodeInput.value = "";
+    alert("Kode berhasil dikirim!");
+  } catch(err) {
+    console.error(err);
+    alert("Gagal kirim kode!");
+  }
 }
 
-function hapusSemua() {
-  fetch(API, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({reset: true})
-  })
-  .then(() => ambil())
-  .catch(err => console.error(err));
+async function hapusSemua() {
+  try {
+    await fetch(API, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({reset: true})
+    });
+    ambil();
+    alert("Semua data berhasil dihapus!");
+  } catch(err) {
+    console.error(err);
+    alert("Gagal hapus data!");
+  }
 }
 
-function ambil() {
-  fetch(API + "?t=" + Date.now())
-    .then(r => r.json())
-    .then(d => {
-      const hasil = document.getElementById("hasil");
-      if(!d) {
-        hasil.innerHTML = "";
-        return;
-      }
+// Share tombol mirip P2P demo
+async function share() {
+  const kodeInput = document.getElementById("kode");
+  if(!kodeInput.value.trim()) return;
+  try {
+    await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({kode: kodeInput.value.trim()})
+    });
+    alert("Kode berhasil di-share!");
+  } catch(err) {
+    console.error(err);
+    alert("Gagal share kode!");
+  }
+}
 
-      let lastData = null;
-      if(Array.isArray(d) && d.length){
-        lastData = d[d.length - 1];
-      } else if(d && d.kode){
-        lastData = d;
-      }
+async function ambil() {
+  try {
+    const res = await fetch(API + "?t=" + Date.now());
+    const d = await res.json();
+    const hasil = document.getElementById("hasil");
+    hasil.innerHTML = "";
+    let lastData = null;
 
-      if(lastData){
-        hasil.innerHTML = `<tr><td>${lastData.waktu}</td><td>${lastData.kode}</td></tr>`;
-      } else {
-        hasil.innerHTML = "";
-      }
-    })
-    .catch(err => console.error(err));
+    if(Array.isArray(d) && d.length){
+      d.forEach(item=>{
+        hasil.innerHTML += `<tr><td>${item.waktu}</td><td>${item.kode}</td></tr>`;
+      });
+      lastData = d[d.length-1];
+    } else if(d && d.kode){
+      hasil.innerHTML = `<tr><td>${d.waktu}</td><td>${d.kode}</td></tr>`;
+      lastData = d;
+    }
+    return lastData;
+  } catch(err) {
+    console.error(err);
+    return null;
+  }
 }
 
 // ===== Tombol Event Listener =====
 document.getElementById("kirimBtn").addEventListener("click", kirim);
 document.getElementById("hapusBtn").addEventListener("click", hapusSemua);
+document.getElementById("shareBtn").addEventListener("click", share);
 document.getElementById("ambilBtn").addEventListener("click", async () => {
-  try {
-    const table = document.getElementById("hasil");
-    const rows = table.getElementsByTagName("tr");
-    if(rows.length === 0){
-      alert("Belum ada data Peer ID");
-      return;
-    }
-    const lastRow = rows[rows.length - 1];
-    const peerId = lastRow.cells[1].innerText;
-    await navigator.clipboard.writeText(peerId);
-    alert("Peer ID disalin: " + peerId);
-  } catch (err) {
-    console.error("Gagal ambil Peer ID dari tabel:", err);
-    alert("Gagal ambil data dari tabel");
+  const table = document.getElementById("hasil");
+  const rows = table.getElementsByTagName("tr");
+  if(rows.length === 0){
+    alert("Belum ada data Peer ID");
+    return;
   }
+  const lastRow = rows[rows.length-1];
+  const peerId = lastRow.cells[1].innerText;
+  await navigator.clipboard.writeText(peerId);
+  alert("Peer ID disalin: " + peerId);
 });
 
 // ===== Auto ambil data setiap 3 detik =====
