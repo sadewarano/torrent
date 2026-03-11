@@ -315,11 +315,17 @@ fetch(API)
 
 if(!d.length) return
 
+// ambil baris terakhir
 const last = d[d.length-1].kode
+
+// jangan connect ke diri sendiri
+if(last === myId.value) return
 
 navigator.clipboard.writeText(last)
 
-peerId.value=last
+peerId.value = last
+
+autoConnect()
 
 ambilBtn.innerText="Copied"
 
