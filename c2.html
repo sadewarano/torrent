@@ -2,22 +2,48 @@
 <html>
 <body>
 
-<div id="hasil"></div>
+<input id="kode" placeholder="Masukkan kode">
+<button onclick="kirim()">Kirim</button>
+<button onclick="hapusSemua()">Hapus Semua</button>
+
+<table border="1">
+  <tbody id="hasil"></tbody>
+</table>
 
 <script>
+const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
 
-const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec"
-
-//https://script.google.com/macros/s/AKfycbwU3k3QpUNzeeyt9R4sOxKgyzvcjYKlj37hPR8035w7wRZHc-C_ZQr1Cu3k1pT4DBJqCg/exec";
-
-function ambil(){
-fetch(API)
-.then(r=>r.json())
-.then(d=>{
-hasil.innerText = d.map(x => x.kode).join(", ");
-});
+function kirim(){
+  if(!kode.value.trim()) return;
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({kode:kode.value.trim()})
+  });
+  kode.value="";
 }
 
+function hapusSemua(){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({reset:true})
+  })
+  .then(()=>ambil());
+}
+
+function ambil(){
+  fetch(API)
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d) {
+        hasil.innerHTML="";
+        return;
+      }
+      // jika d object tunggal
+      hasil.innerHTML=`<tr><td>${d.waktu}</td><td>${d.kode}</td></tr>`;
+    });
+}
+
+// ambil data setiap 3 detik
 ambil();
 setInterval(ambil,3000);
 
