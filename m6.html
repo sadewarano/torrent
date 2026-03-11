@@ -4,139 +4,126 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>P2P Chat</title>
+<title>P2P Mesh Chat</title>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <style>
 
-/* ===== Base Layout ===== */
-
 body{
-  margin:0;
-  font-family:system-ui;
-  background:#e5e7eb;
+margin:0;
+font-family:system-ui;
+background:#e5e7eb;
 }
 
 .app{
-  max-width:500px;
-  margin:auto;
-  height:100vh;
-
-  display:flex;
-  flex-direction:column;
-
-  background:white;
-  box-shadow:0 0 20px rgba(0,0,0,.1);
+max-width:500px;
+margin:auto;
+height:100vh;
+display:flex;
+flex-direction:column;
+background:white;
+box-shadow:0 0 20px rgba(0,0,0,.1);
 }
 
 header{
-  background:#111827;
-  color:white;
-  padding:14px;
-  text-align:center;
-  font-size:14px;
+background:#111827;
+color:white;
+padding:14px;
+text-align:center;
+font-size:14px;
 }
 
-/* ===== Connection Panel ===== */
-
 .connectionPanel{
-  padding:12px;
-  border-bottom:1px solid #eee;
+padding:12px;
+border-bottom:1px solid #eee;
 }
 
 .row{
-  display:flex;
-  gap:6px;
-  margin-top:6px;
+display:flex;
+gap:6px;
+margin-top:6px;
 }
 
 .row input{
-  flex:1;
-  padding:10px;
-  border:1px solid #ccc;
-  border-radius:6px;
-  font-size:13px;
+flex:1;
+padding:10px;
+border:1px solid #ccc;
+border-radius:6px;
+font-size:13px;
 }
 
 .row button{
-  padding:10px 12px;
-  border:none;
-  background:#2563eb;
-  color:white;
-  border-radius:6px;
-  cursor:pointer;
+padding:10px 12px;
+border:none;
+background:#2563eb;
+color:white;
+border-radius:6px;
+cursor:pointer;
 }
 
-/* ===== Chat Area ===== */
-
 #chat{
-  flex:1;
-  overflow-y:auto;
-  padding:12px;
-
-  background:#f3f4f6;
-
-  display:flex;
-  flex-direction:column;
-  gap:8px;
+flex:1;
+overflow-y:auto;
+padding:12px;
+background:#f3f4f6;
+display:flex;
+flex-direction:column;
+gap:8px;
 }
 
 .message{
-  max-width:75%;
-  padding:8px 10px;
-  border-radius:10px;
-  font-size:14px;
-  line-height:1.4;
+max-width:75%;
+padding:8px 10px;
+border-radius:10px;
+font-size:14px;
+line-height:1.4;
 }
 
 .me{
-  align-self:flex-end;
-  background:#2563eb;
-  color:white;
+align-self:flex-end;
+background:#2563eb;
+color:white;
 }
 
 .other{
-  align-self:flex-start;
-  background:white;
-  border:1px solid #ddd;
+align-self:flex-start;
+background:white;
+border:1px solid #ddd;
 }
 
 .meta{
-  font-size:10px;
-  opacity:.6;
-  margin-top:3px;
+font-size:10px;
+opacity:.6;
+margin-top:3px;
 }
 
-/* ===== Input Area ===== */
-
 .chatInput{
-  display:flex;
-  gap:6px;
-  padding:10px;
-
-  border-top:1px solid #eee;
-  background:white;
+display:flex;
+gap:6px;
+padding:10px;
+border-top:1px solid #eee;
+background:white;
 }
 
 .chatInput input{
-  flex:1;
-  padding:10px;
-  border:1px solid #ccc;
-  border-radius:6px;
-  font-size:14px;
+flex:1;
+padding:10px;
+border:1px solid #ccc;
+border-radius:6px;
+font-size:14px;
 }
 
 .chatInput button{
-  width:80px;
-  border:none;
-  background:#16a34a;
-  color:white;
-  border-radius:6px;
+width:80px;
+border:none;
+background:#16a34a;
+color:white;
+border-radius:6px;
 }
 
 #myId{
-  font-size:11px;
+font-size:11px;
 }
 
 </style>
@@ -147,29 +134,29 @@ header{
 
 <div class="app">
 
-<header>P2P Group Chat</header>
+<header>P2P Mesh Chat</header>
 
 <div class="connectionPanel">
 
-  <div class="row">
-    <input id="myId" readonly>
-    <button id="copyBtn">Copy</button>
-    <button id="shareBtn">Share</button>
-    <button id="ambilBtn">Ambil</button>
-  </div>
+<div class="row">
+<input id="myId" readonly>
+<button id="copyBtn">Copy</button>
+<button id="shareBtn">Share</button>
+<button id="ambilBtn">Ambil</button>
+</div>
 
-  <div class="row">
-    <input id="peerId" placeholder="Peer ID">
-    <button id="pasteBtn">Paste</button>
-  </div>
+<div class="row">
+<input id="peerId" placeholder="Peer ID">
+<button id="pasteBtn">Paste</button>
+</div>
 
 </div>
 
 <div id="chat"></div>
 
 <div class="chatInput">
-  <input id="messageInput" placeholder="Tulis pesan...">
-  <button id="sendBtn">Kirim</button>
+<input id="messageInput" placeholder="Tulis pesan...">
+<button id="sendBtn">Kirim</button>
 </div>
 
 </div>
@@ -177,353 +164,348 @@ header{
 
 <script>
 
-/* ================================
-   STATE
-================================ */
+/* =======================
+STATE
+======================= */
 
-let chatLog = []
-let connections = []
+let chatLog=[]
+let connections=[]
+let seenMessages=new Set()
 
-const peer = new Peer()
+const peer=new Peer()
 
-const chat = document.getElementById("chat")
-const myId = document.getElementById("myId")
-const peerId = document.getElementById("peerId")
-const pasteBtn = document.getElementById("pasteBtn")
-const shareBtn = document.getElementById("shareBtn")
-const ambilBtn = document.getElementById("ambilBtn")
-const sendBtn = document.getElementById("sendBtn")
-const messageInput = document.getElementById("messageInput")
+const chat=document.getElementById("chat")
+const myId=document.getElementById("myId")
+const peerId=document.getElementById("peerId")
 
+const copyBtn=document.getElementById("copyBtn")
+const pasteBtn=document.getElementById("pasteBtn")
+const shareBtn=document.getElementById("shareBtn")
+const ambilBtn=document.getElementById("ambilBtn")
 
-let seenMessages = new Set()
-let username = ""
+const sendBtn=document.getElementById("sendBtn")
+const messageInput=document.getElementById("messageInput")
+
 const API="https://script.google.com/macros/s/AKfycbwU3k3QpUNzeeyt9R4sOxKgyzvcjYKlj37hPR8035w7wRZHc-C_ZQr1Cu3k1pT4DBJqCg/exec"
 
-/* ================================
-   RANDOM USERNAME GENERATOR
-================================ */
+let username=""
 
-const animals = [
-"Kucing","Anjing","Kelinci","Burung","Kuda",
-"Kambing","Domba","Ayam","Bebek","Ikan",
-"Panda","Rubah","Singa","Harimau","Gajah",
-"Ular","KuraKura","Koala","Serigala","Elang"
-]
+/* =======================
+USERNAME
+======================= */
 
-const colors = [
-"Merah","Biru","Hijau","Kuning","Hitam",
-"Putih","Ungu","Oranye","Coklat","Pink",
-"Emas","Perak","Abu","Toska","Magenta"
-]
+const animals=["Kucing","Anjing","Kelinci","Burung","Kuda","Kambing","Domba","Ayam","Bebek","Ikan","Panda","Rubah","Singa","Harimau","Gajah","Ular","KuraKura","Koala","Serigala","Elang"]
+
+const colors=["Merah","Biru","Hijau","Kuning","Hitam","Putih","Ungu","Oranye","Coklat","Pink","Emas","Perak","Abu","Toska","Magenta"]
 
 function generateName(){
 
-  const animal = animals[Math.floor(Math.random()*animals.length)]
-  const color = colors[Math.floor(Math.random()*colors.length)]
-  const number = Math.floor(Math.random()*1000)
-                .toString()
-                .padStart(3,"0")
+const animal=animals[Math.floor(Math.random()*animals.length)]
+const color=colors[Math.floor(Math.random()*colors.length)]
+const number=Math.floor(Math.random()*1000).toString().padStart(3,"0")
 
-  return animal + color + number
+return animal+color+number
 }
 
-let savedName = localStorage.getItem("chatUsername")
+let savedName=localStorage.getItem("chatUsername")
 
 if(!savedName){
-  savedName = generateName()
-  localStorage.setItem("chatUsername",savedName)
+savedName=generateName()
+localStorage.setItem("chatUsername",savedName)
 }
 
-username = savedName
+username=savedName
 
-
-/* ================================
-   UTILS
-================================ */
+/* =======================
+UTIL
+======================= */
 
 function formatTime(t){
 
-  const d = new Date(t)
+const d=new Date(t)
 
-  return (
-    d.getHours().toString().padStart(2,"0") +
-    ":" +
-    d.getMinutes().toString().padStart(2,"0")
-  )
+return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")
+
 }
 
-
-/* ================================
-   RENDER CHAT
-================================ */
+/* =======================
+RENDER
+======================= */
 
 function render(){
 
-  chat.innerHTML = ""
+chat.innerHTML=""
 
-  chatLog.forEach(m => {
+chatLog.forEach(m=>{
 
-    const div = document.createElement("div")
+const div=document.createElement("div")
 
-    div.className =
-      "message " +
-      (m.user === username ? "me" : "other")
+div.className="message "+(m.user===username?"me":"other")
 
-    div.innerHTML = `
-      <div>${m.user}: ${m.text}</div>
-      <div class="meta">${formatTime(m.time)}</div>
-    `
+div.innerHTML=`
+<div>${m.user}: ${m.text}</div>
+<div class="meta">${formatTime(m.time)}</div>
+`
 
-    chat.appendChild(div)
+chat.appendChild(div)
 
-  })
+})
 
-  chat.scrollTop = chat.scrollHeight
-}
-
-
-/* ================================
-   BROADCAST
-================================ */
-
-function broadcast(msg, exceptPeer=null){
-
-  connections.forEach(c=>{
-    if(c.open && c.peer !== exceptPeer){
-      c.send(msg)
-    }
-  })
+chat.scrollTop=chat.scrollHeight
 
 }
 
+/* =======================
+BROADCAST
+======================= */
 
-/* ================================
-   SEND MESSAGE
-================================ */
+function broadcast(data,exceptPeer=null){
 
-sendBtn.onclick = () => {
+connections.forEach(c=>{
 
-  const text = messageInput.value.trim()
-  if(!text) return
+if(c.open && c.peer!==exceptPeer){
+c.send(data)
+}
 
-  const msg = {
-    id: crypto.randomUUID(),
-    user: username,
-    text: text,
-    time: Date.now()
-  }
-
-  seenMessages.add(msg.id)
-
-  chatLog.push(msg)
-  render()
-
-  broadcast({
-    type:"mesh",
-    msg
-  })
-
-  messageInput.value=""
+})
 
 }
 
+/* =======================
+SEND
+======================= */
 
-/* ================================
-   PEER EVENTS
-================================ */
+sendBtn.onclick=()=>{
+
+const text=messageInput.value.trim()
+
+if(!text)return
+
+const msg={
+id:crypto.randomUUID(),
+user:username,
+text:text,
+time:Date.now()
+}
+
+seenMessages.add(msg.id)
+
+chatLog.push(msg)
+
+render()
+
+broadcast({type:"mesh",msg})
+
+messageInput.value=""
+
+}
+
+/* =======================
+PEER OPEN
+======================= */
 
 peer.on("open",id=>{
 
-  myId.value = id
+myId.value=id
 
-  chatLog.push({
-    user:"System",
-    text:"Peer siap: "+id,
-    time:Date.now()
-  })
+chatLog.push({
+id:crypto.randomUUID(),
+user:"System",
+text:"Peer siap: "+id,
+time:Date.now()
+})
 
-  render()
+render()
 
 })
 
 peer.on("connection",conn=>{
-  setup(conn)
+setup(conn)
 })
 
+/* =======================
+CLIPBOARD
+======================= */
 
-/* ================================
-   COPY ID
-================================ */
+copyBtn.onclick=()=>{
 
-copyBtn.onclick = () => {
+navigator.clipboard.writeText(myId.value)
 
-  navigator.clipboard.writeText(myId.value)
+copyBtn.innerText="Copied"
 
-  copyBtn.innerText = "Copied"
-
-  setTimeout(()=>{
-    copyBtn.innerText = "Copy"
-  },1200)
+setTimeout(()=>{
+copyBtn.innerText="Copy"
+},1200)
 
 }
 
+pasteBtn.onclick=async()=>{
 
-/* ================================
-   PASTE PEER ID
-================================ */
+try{
 
-pasteBtn.onclick = async () => {
-  try{
-    const text = await navigator.clipboard.readText()
-    peerId.value = text.trim()
-    autoConnect()
-  }catch{
-    alert("Clipboard tidak bisa diakses")
-  }
+const text=await navigator.clipboard.readText()
+
+peerId.value=text.trim()
+
+autoConnect()
+
+}catch{
+
+alert("Clipboard tidak bisa diakses")
+
 }
 
-shareBtn.onclick = () => {
-  fetch(API,{
-    method:"POST",
-    body:JSON.stringify({
-      kode: myId.value
-    })
-  })
-  shareBtn.innerText="Shared"
-  setTimeout(()=>{
-    shareBtn.innerText="Share"
-  },1200)
 }
 
-ambilBtn.onclick = () => {
-  fetch(API)
-  .then(r=>r.json())
-  .then(d=>{
-    d.forEach(x=>{
-      const id = x.kode.trim()
-      const sudahAda = connections.find(c => c.peer === id)
-      if(id && id !== myId.value && !sudahAda){
-        const conn = peer.connect(id)
-        setup(conn)
-      }
-    })
-  })
+/* =======================
+SHARE ID
+======================= */
+
+shareBtn.onclick=()=>{
+
+fetch(API,{
+method:"POST",
+body:JSON.stringify({kode:myId.value})
+})
+
 }
 
+/* =======================
+AMBIL PEERS
+======================= */
 
+ambilBtn.onclick=()=>{
 
-/* ================================
-   AUTO CONNECT
-================================ */
+fetch(API)
+.then(r=>r.json())
+.then(d=>{
+
+d.forEach(x=>{
+
+const id=x.kode.trim()
+
+if(
+id &&
+id!==myId.value &&
+!connections.find(c=>c.peer===id)
+){
+
+const conn=peer.connect(id)
+
+setup(conn)
+
+}
+
+})
+
+})
+
+}
+
+/* =======================
+AUTO CONNECT
+======================= */
 
 function autoConnect(){
 
-  const id = peerId.value.trim()
+const id=peerId.value.trim()
 
-  if(!id) return
+if(!id)return
 
-  if(id === myId.value){
-    alert("Tidak bisa connect ke diri sendiri")
-    return
-  }
+if(id===myId.value)return
 
-  const conn = peer.connect(id)
+if(connections.find(c=>c.peer===id))return
 
-  setup(conn)
+const conn=peer.connect(id)
+
+setup(conn)
 
 }
 
 peerId.addEventListener("input",autoConnect)
 
-
-/* ================================
-   CONNECTION SETUP
-================================ */
+/* =======================
+SETUP CONNECTION
+======================= */
 
 function setup(conn){
 
-  connections.push(conn)
+connections.push(conn)
 
-  conn.on("open",()=>{
+conn.on("open",()=>{
 
-    chatLog.push({
-      user:"System",
-      text:"Terhubung: "+conn.peer,
-      time:Date.now()
-    })
+chatLog.push({
+id:crypto.randomUUID(),
+user:"System",
+text:"Terhubung: "+conn.peer,
+time:Date.now()
+})
 
-    render()
+render()
 
-    conn.send({
-      type:"sync",
-      chatLog
-    })
+conn.send({
+type:"sync",
+chatLog
+})
 
-  })
+})
 
+conn.on("data",data=>{
 
-  conn.on("data",data=>{
+/* ===== MESH MESSAGE ===== */
 
-    /* =========================
-       MESH MESSAGE RELAY
-    ========================= */
+if(data.type==="mesh"){
 
-    if(data.type==="mesh"){
+const m=data.msg
 
-      const m = data.msg
+if(seenMessages.has(m.id))return
 
-      if(seenMessages.has(m.id)) return
+seenMessages.add(m.id)
 
-      seenMessages.add(m.id)
+chatLog.push(m)
 
-      chatLog.push(m)
+render()
 
-      render()
-
-      /* relay ke peer lain */
-      connections.forEach(c=>{
-        if(c.open && c.peer !== conn.peer){
-          c.send(data)
-        }
-      })
-
-    }
-
-
-    /* =========================
-       SYNC CHAT HISTORY
-    ========================= */
-
-   if(data.type==="sync"){
-
-  data.chatLog.forEach(m=>{
-    if(!seenMessages.has(m.id)){
-      seenMessages.add(m.id)
-      chatLog.push(m)
-    }
-  })
-
-  render()
+broadcast(data,conn.peer)
 
 }
 
-  })
+/* ===== SYNC HISTORY ===== */
 
+if(data.type==="sync"){
 
-  conn.on("close",()=>{
+data.chatLog.forEach(m=>{
 
-    chatLog.push({
-      user:"System",
-      text:"Peer terputus: "+conn.peer,
-      time:Date.now()
-    })
+if(!seenMessages.has(m.id)){
 
-    render()
+seenMessages.add(m.id)
 
-    connections = connections.filter(c=>c!==conn)
+chatLog.push(m)
 
-  })
+}
+
+})
+
+render()
+
+}
+
+})
+
+conn.on("close",()=>{
+
+chatLog.push({
+id:crypto.randomUUID(),
+user:"System",
+text:"Peer terputus: "+conn.peer,
+time:Date.now()
+})
+
+render()
+
+connections=connections.filter(c=>c!==conn)
+
+})
 
 }
 
