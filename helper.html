@@ -62,33 +62,26 @@ function ambil(){
 ambil();
 setInterval(ambil,3000);
 
-// ===== Tombol Ambil Peer ID ke Clipboard =====
+// ===== Tombol Ambil Peer ID dari Tabel =====
 const ambilBtn = document.getElementById("ambilBtn");
 ambilBtn.onclick = async () => {
   try {
-    const res = await fetch(API+"?t="+Date.now());
-    const data = await res.json();
-
-    let lastPeerId = null;
-
-    if(Array.isArray(data) && data.length){
-      lastPeerId = data[data.length - 1].kode; // ambil Peer ID terbaru
-    } else if(data && data.kode){
-      lastPeerId = data.kode;
-    }
-
-    if(!lastPeerId){
-      alert("Belum ada data di GAS");
+    const table = document.getElementById("hasil");
+    const rows = table.getElementsByTagName("tr");
+    if(rows.length === 0){
+      alert("Belum ada data Peer ID");
       return;
     }
+    const lastRow = rows[rows.length - 1];
+    const peerId = lastRow.cells[1].innerText;
 
     // salin ke clipboard
-    await navigator.clipboard.writeText(lastPeerId);
-    alert("Peer ID disalin: " + lastPeerId);
+    await navigator.clipboard.writeText(peerId);
+    alert("Peer ID disalin: " + peerId);
 
   } catch (err) {
-    console.error("Gagal ambil Peer ID:", err);
-    alert("Gagal ambil data dari GAS");
+    console.error("Gagal ambil Peer ID dari tabel:", err);
+    alert("Gagal ambil data dari tabel");
   }
 };
 </script>
