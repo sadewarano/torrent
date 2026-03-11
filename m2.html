@@ -127,6 +127,41 @@ const connectBtn=document.getElementById("connectBtn")
 const sendBtn=document.getElementById("sendBtn")
 const messageInput=document.getElementById("messageInput")
 
+// ===== AUTO GENERATE USERNAME =====
+
+const animals=[
+"Kucing","Anjing","Kelinci","Burung","Kuda",
+"Kambing","Domba","Ayam","Bebek","Ikan",
+"Panda","Rubah","Singa","Harimau","Gajah",
+"Ular","KuraKura","Koala","Serigala","Elang"
+]
+
+const colors=[
+"Merah","Biru","Hijau","Kuning","Hitam",
+"Putih","Ungu","Oranye","Coklat","Pink",
+"Emas","Perak","Abu","Toska","Magenta"
+]
+
+function generateName(){
+
+const animal=animals[Math.floor(Math.random()*animals.length)]
+const color=colors[Math.floor(Math.random()*colors.length)]
+const number=Math.floor(Math.random()*1000).toString().padStart(3,"0")
+
+return animal+color+number
+
+}
+
+// cek apakah sudah ada di localStorage
+let savedName=localStorage.getItem("chatUsername")
+
+if(!savedName){
+savedName=generateName()
+localStorage.setItem("chatUsername",savedName)
+}
+
+username.value=savedName
+
 function render(){
   chat.innerText = chatLog.map(m=>`${m.user}: ${m.text}`).join("\n")
   chat.scrollTop = chat.scrollHeight
