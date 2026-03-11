@@ -366,61 +366,41 @@ copyBtn.onclick = () => {
 ================================ */
 
 pasteBtn.onclick = async () => {
-
   try{
-
     const text = await navigator.clipboard.readText()
-
     peerId.value = text.trim()
-
     autoConnect()
-
   }catch{
-
     alert("Clipboard tidak bisa diakses")
-
   }
-
 }
 
 shareBtn.onclick = () => {
-
   fetch(API,{
     method:"POST",
     body:JSON.stringify({
       kode: myId.value
     })
   })
-
   shareBtn.innerText="Shared"
-
   setTimeout(()=>{
     shareBtn.innerText="Share"
   },1200)
-
 }
 
 ambilBtn.onclick = () => {
-
   fetch(API)
   .then(r=>r.json())
   .then(d=>{
-
     d.forEach(x=>{
-
       const id = x.kode.trim()
-
-      if(id && id !== myId.value){
-
+      const sudahAda = connections.find(c => c.peer === id)
+      if(id && id !== myId.value && !sudahAda){
         const conn = peer.connect(id)
         setup(conn)
-
       }
-
     })
-
   })
-
 }
 
 
