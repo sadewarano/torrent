@@ -35,6 +35,7 @@
     background-color: #4CAF50;
     color: white;
     border: none;
+    cursor: pointer;
   }
 
   button:hover {
@@ -83,10 +84,12 @@
 <body>
 <div class="container">
   <input id="kode" placeholder="Masukkan kode">
+
   <div class="btn-group">
-    <button onclick="kirim()">Kirim</button>
-    <button onclick="hapusSemua()">Hapus Semua</button>
+    <button id="kirimBtn">Kirim</button>
+    <button id="hapusBtn">Hapus Semua</button>
   </div>
+
   <button id="ambilBtn">Ambil Peer ID</button>
 
   <table>
@@ -103,38 +106,41 @@
 <script>
 const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
 
-function kirim(){
+// ===== Fungsi =====
+function kirim() {
   const kodeInput = document.getElementById("kode");
   if(!kodeInput.value.trim()) return;
-  fetch(API,{
-    method:"POST",
-    headers: {"Content-Type":"application/json"},
-    body:JSON.stringify({kode:kodeInput.value.trim()})
-  });
-  kodeInput.value="";
-}
 
-function hapusSemua(){
-  fetch(API,{
-    method:"POST",
-    headers: {"Content-Type":"application/json"},
-    body:JSON.stringify({reset:true})
+  fetch(API, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({kode: kodeInput.value.trim()})
   })
-  .then(()=>ambil());
+  .then(() => { kodeInput.value = ""; })
+  .catch(err => console.error(err));
 }
 
-function ambil(){
-  fetch(API+"?t="+Date.now())
-    .then(r=>r.json())
-    .then(d=>{
+function hapusSemua() {
+  fetch(API, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({reset: true})
+  })
+  .then(() => ambil())
+  .catch(err => console.error(err));
+}
+
+function ambil() {
+  fetch(API + "?t=" + Date.now())
+    .then(r => r.json())
+    .then(d => {
       const hasil = document.getElementById("hasil");
       if(!d) {
-        hasil.innerHTML="";
+        hasil.innerHTML = "";
         return;
       }
 
       let lastData = null;
-
       if(Array.isArray(d) && d.length){
         lastData = d[d.length - 1];
       } else if(d && d.kode){
@@ -142,19 +148,18 @@ function ambil(){
       }
 
       if(lastData){
-        hasil.innerHTML=`<tr><td>${lastData.waktu}</td><td>${lastData.kode}</td></tr>`;
+        hasil.innerHTML = `<tr><td>${lastData.waktu}</td><td>${lastData.kode}</td></tr>`;
       } else {
-        hasil.innerHTML="";
+        hasil.innerHTML = "";
       }
-    });
+    })
+    .catch(err => console.error(err));
 }
 
-// ambil data setiap 3 detik
-ambil();
-setInterval(ambil,3000);
-
-// Tombol Ambil Peer ID
-document.getElementById("ambilBtn").onclick = async () => {
+// ===== Tombol Event Listener =====
+document.getElementById("kirimBtn").addEventListener("click", kirim);
+document.getElementById("hapusBtn").addEventListener("click", hapusSemua);
+document.getElementById("ambilBtn").addEventListener("click", async () => {
   try {
     const table = document.getElementById("hasil");
     const rows = table.getElementsByTagName("tr");
@@ -170,7 +175,11 @@ document.getElementById("ambilBtn").onclick = async () => {
     console.error("Gagal ambil Peer ID dari tabel:", err);
     alert("Gagal ambil data dari tabel");
   }
-};
+});
+
+// ===== Auto ambil data setiap 3 detik =====
+ambil();
+setInterval(ambil, 3000);
 </script>
 </body>
 </html>
