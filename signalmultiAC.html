@@ -312,23 +312,25 @@ ambilBtn.onclick = async () => {
     const res = await fetch(API);
     const data = await res.json();
 
-    // Jika data kosong, hentikan
-    if (!data || !data.kode) return;
+    // Pastikan data ada
+    if (!data || !data.kode) {
+      alert("Tidak ada data di GAS");
+      return;
+    }
 
     const last = data.kode;
 
-    // jangan connect ke diri sendiri
+    // Jangan connect ke diri sendiri
     if (last === myId.value) return;
 
-    // salin ke clipboard
+    // Salin ke clipboard
     await navigator.clipboard.writeText(last);
 
-    // isi input peerId
+    // Isi input peerId dan auto connect
     peerId.value = last;
-
-    // auto connect
     autoConnect();
 
+    // Ubah tombol sementara sebagai feedback
     ambilBtn.innerText = "Copied";
     setTimeout(() => {
       ambilBtn.innerText = "Ambil";
@@ -336,7 +338,7 @@ ambilBtn.onclick = async () => {
 
   } catch (err) {
     console.error("Gagal ambil data dari GAS:", err);
-    alert("Gagal ambil data. Periksa koneksi atau GAS.");
+    alert("Gagal ambil data. Periksa koneksi atau publish GAS");
   }
 }
 
