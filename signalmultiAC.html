@@ -23,6 +23,7 @@ button{background:#2563eb;color:white;border:none;cursor:pointer;}
 .connectRow p{margin:0;white-space:nowrap;}
 .connectRow input{flex:1;}
 .connectRow button{width:80px;}
+table{margin-top:10px;width:100%;}
 input{min-width:0;}
 #myId{font-size:12px;}
 </style>
@@ -38,7 +39,6 @@ input{min-width:0;}
 <div class="container">
 
 <div class="card">
-
 <div class="copyRow">
 <p>Public Key:</p>
 <input id="myId" readonly>
@@ -53,6 +53,12 @@ input{min-width:0;}
 <button id="ambilBtn">Ambil</button>
 </div>
 
+<!-- Tambahkan tabel kecil untuk menampilkan Peer ID terbaru -->
+<table border="1">
+  <thead><tr><th>Waktu</th><th>Peer ID</th></tr></thead>
+  <tbody id="tabelPeer"></tbody>
+</table>
+
 </div>
 
 <div class="card">
@@ -65,22 +71,19 @@ input{min-width:0;}
 </div>
 
 <script>
-
 const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec"
 
 let chatLog=[]
 let connections=[]
 
 const peer=new Peer()
-
 const chat=document.getElementById("chat")
 const myId=document.getElementById("myId")
 const peerId=document.getElementById("peerId")
-
 const pasteBtn=document.getElementById("pasteBtn")
 const shareBtn=document.getElementById("shareBtn")
 const ambilBtn=document.getElementById("ambilBtn")
-
+const tabelPeer=document.getElementById("tabelPeer")
 const sendBtn=document.getElementById("sendBtn")
 const messageInput=document.getElementById("messageInput")
 
@@ -100,14 +103,10 @@ function broadcast(msg){
 sendBtn.onclick = ()=>{
   const text = messageInput.value.trim()
   if(!text) return
-
   const msg = {user: username, text, time: Date.now()}
-
   chatLog.push(msg)
   render()
-
   broadcast({type:"chat", msg})
-
   messageInput.value=""
 }
 
@@ -123,13 +122,11 @@ peer.on("connection", conn=>{
 
 function setup(conn){
   connections.push(conn)
-
   conn.on("open",()=>{
     chatLog.push({user:"System",text:"Terhubung dengan "+conn.peer})
     render()
     conn.send({type:"sync",chatLog})
   })
-
   conn.on("data",data=>{
     if(data.type==="chat"){
       chatLog.push(data.msg)
@@ -140,7 +137,6 @@ function setup(conn){
       render()
     }
   })
-
   conn.on("close",()=>{
     chatLog.push({user:"System",text:"Peer "+conn.peer+" terputus"})
     render()
@@ -179,48 +175,52 @@ peerId.addEventListener("input", autoConnect)
 
 // ===== SHARE KE GAS =====
 shareBtn.onclick=()=>{
-  fetch(API,{
-    method:"POST",
-    body:JSON.stringify({kode:myId.value})
-  })
+  fetch(API,{method:"POST",body:JSON.stringify({kode:myId.value})})
   shareBtn.innerText="Shared"
   setTimeout(()=>{shareBtn.innerText="Share"},1500)
 }
 
-// ===== AMBIL DATA TERAKHIR =====
-ambilBtn.onclick = async () => {
-  try {
+// ===== AMBIL DATA dari GAS ke tabel =====
+async function ambilData(){
+  try{
     const res = await fetch(API+"?t="+Date.now())
     const data = await res.json()
-
-    // Ambil Peer ID terbaru dari array atau object
-    let lastPeerId = null
-    if(Array.isArray(data) && data.length){
-      lastPeerId = data[data.length-1].kode
+    tabelPeer.innerHTML = ""
+    let lastPeer = null
+    if(Array.isArray(data)){
+      data.forEach(d=>{
+        tabelPeer.innerHTML += `<tr><td>${d.waktu}</td><td>${d.kode}</td></tr>`
+      })
+      if(data.length) lastPeer = data[data.length-1].kode
     } else if(data && data.kode){
-      lastPeerId = data.kode
+      tabelPeer.innerHTML = `<tr><td>${data.waktu}</td><td>${data.kode}</td></tr>`
+      lastPeer = data.kode
     }
-
-    if(!lastPeerId){
-      alert("Belum ada data di GAS")
-      return
-    }
-
-    // Salin ke clipboard
-    await navigator.clipboard.writeText(lastPeerId)
-
-    // Isi input peerId dan auto connect
-    peerId.value = lastPeerId
-    autoConnect()
-
-    // Feedback tombol
-    ambilBtn.innerText = "Copied"
-    setTimeout(()=>{ambilBtn.innerText = "Ambil"},1500)
-
-  } catch(err){
-    console.error("Gagal ambil data dari GAS:",err)
-    alert("Gagal ambil data dari GAS. Periksa koneksi atau publish GAS")
+    return lastPeer
+  }catch(err){
+    console.error("Gagal ambil data:",err)
+    return null
   }
+}
+
+// ambil data setiap 3 detik
+ambilData()
+setInterval(ambilData,3000)
+
+// ===== Tombol Ambil Peer ID dari tabel =====
+ambilBtn.onclick = async ()=>{
+  // ambil baris terakhir dari tabel
+  const rows = tabelPeer.querySelectorAll("tr")
+  if(!rows.length){
+    alert("Belum ada Peer ID di tabel")
+    return
+  }
+  const lastRow = rows[rows.length-1]
+  const peerIdText = lastRow.cells[1].innerText
+  peerId.value = peerIdText
+  await navigator.clipboard.writeText(peerIdText)
+  alert("Peer ID disalin dari tabel: " + peerIdText)
+  autoConnect()
 }
 
 </script>
