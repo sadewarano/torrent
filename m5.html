@@ -1,288 +1,375 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>WebTorrent P2P Share</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P Chat</title>
 
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <style>
+
 body{
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
-  padding:14px;
-  max-width:720px;
-  margin:auto;
-  background:#fafafa;
+margin:0;
+font-family:system-ui;
+background:#e5e7eb;
 }
-h2{font-size:1.4em}
-input,button{
-  width:100%;
-  padding:14px;
-  margin:8px 0;
-  font-size:1em;
-  border-radius:10px;
-}
-input{border:1px solid #ccc}
-button{
-  border:none;
-  cursor:pointer;
-  font-weight:600;
-}
-.btn-seed{background:#4CAF50;color:#fff}
-.btn-copy{background:#2196F3;color:#fff}
-.btn-download{background:#FF9800;color:#fff}
-button:disabled{background:#aaa}
 
-.status{
-  background:#e3f2fd;
-  padding:12px;
-  border-radius:10px;
-  margin-top:10px;
-  font-size:0.95em;
+.app{
+max-width:500px;
+margin:auto;
+height:100vh;
+display:flex;
+flex-direction:column;
+background:white;
+box-shadow:0 0 20px rgba(0,0,0,.1);
 }
-.stats{
-  background:#f1f8e9;
-  padding:12px;
-  border-radius:10px;
-  margin-top:10px;
-  font-size:0.9em;
-}
-.stats div{margin:4px 0}
 
-pre{
-  background:#111;
-  color:#0f0;
-  padding:10px;
-  border-radius:10px;
-  height:200px;
-  overflow:auto;
-  font-size:12px;
+header{
+background:#111827;
+color:white;
+padding:14px;
+text-align:center;
+font-size:14px;
 }
-.footer{
-  text-align:center;
-  font-size:0.8em;
-  color:#666;
-  margin-top:10px;
+
+.connectionPanel{
+padding:12px;
+border-bottom:1px solid #eee;
 }
+
+.row{
+display:flex;
+gap:6px;
+margin-top:6px;
+}
+
+.row input{
+flex:1;
+padding:10px;
+border:1px solid #ccc;
+border-radius:6px;
+font-size:13px;
+}
+
+.row button{
+padding:10px 12px;
+border:none;
+background:#2563eb;
+color:white;
+border-radius:6px;
+cursor:pointer;
+}
+
+#chat{
+flex:1;
+overflow-y:auto;
+padding:12px;
+background:#f3f4f6;
+display:flex;
+flex-direction:column;
+gap:8px;
+}
+
+.message{
+max-width:75%;
+padding:8px 10px;
+border-radius:10px;
+font-size:14px;
+line-height:1.4;
+}
+
+.me{
+align-self:flex-end;
+background:#2563eb;
+color:white;
+}
+
+.other{
+align-self:flex-start;
+background:white;
+border:1px solid #ddd;
+}
+
+.meta{
+font-size:10px;
+opacity:.6;
+margin-top:3px;
+}
+
+.chatInput{
+display:flex;
+gap:6px;
+padding:10px;
+border-top:1px solid #eee;
+background:white;
+}
+
+.chatInput input{
+flex:1;
+padding:10px;
+border:1px solid #ccc;
+border-radius:6px;
+font-size:14px;
+}
+
+.chatInput button{
+width:80px;
+border:none;
+background:#16a34a;
+color:white;
+border-radius:6px;
+}
+
+#myId{
+font-size:11px;
+}
+
 </style>
 </head>
+
 <body>
 
-<h2>📤 WebTorrent P2P Share</h2>
+<div class="app">
 
-<div class="status">
-Upload → Seed → Share Magnet → Download → <strong>Ikut Seeding</strong>
+<header>
+P2P Group Chat
+</header>
+
+<div class="connectionPanel">
+
+<div class="row">
+<input id="myId" readonly>
+<button id="copyBtn">Copy</button>
 </div>
 
-<input type="file" id="fileInput">
-
-<button class="btn-seed" onclick="seedFile()">🌱 Mulai Seeding</button>
-
-<input id="magnet" placeholder="Magnet URI muncul di sini">
-
-<button class="btn-seed" id="shareBtn" onclick="shareMagnet()" disabled>
-🚀 Share Magnet
-</button>
-
-
-<button class="btn-copy" id="copyBtn" onclick="copyMagnet()" disabled>
-📋 Salin Magnet
-</button>
-
-<button class="btn-download" onclick="download()">⬇️ Download dari Magnet</button>
-
-<div id="info" class="status">ℹ️ Belum ada aktivitas</div>
-
-<div class="stats">
-  <strong>📊 Status Torrent</strong>
-  <div>🟢 Mode: <span id="seedStatus">Tidak aktif</span></div>
-  <div>👥 Peer: <span id="peerCount">0</span></div>
-  <div>📦 File: <span id="fileCount">0</span></div>
-  <div>⬆️ Upload total: <span id="uploaded">0 B</span></div>
-  <div>⚡ Upload speed: <span id="upSpeed">0 B/s</span></div>
+<div class="row">
+<input id="peerId" placeholder="Peer ID">
+<button id="pasteBtn">Paste</button>
 </div>
 
-<pre id="log"></pre>
+</div>
 
-<div class="footer">
-Browser Torrent · Selama tab terbuka, kamu adalah seeder 🌱
+<div id="chat"></div>
+
+<div class="chatInput">
+<input id="messageInput" placeholder="Tulis pesan...">
+<button id="sendBtn">Kirim</button>
+</div>
+
 </div>
 
 <script>
-const client = new WebTorrent();
-let currentTorrent = null;
-let uploadedBytes = 0;
 
-const log = msg => {
-  const p = document.getElementById("log");
-  p.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
-  p.scrollTop = p.scrollHeight;
-};
+let chatLog=[]
+let connections=[]
 
-function format(bytes){
-  if(bytes > 1024*1024) return (bytes/1024/1024).toFixed(2)+" MB";
-  if(bytes > 1024) return (bytes/1024).toFixed(1)+" KB";
-  return bytes+" B";
+const peer=new Peer()
+
+const chat=document.getElementById("chat")
+const myId=document.getElementById("myId")
+const peerId=document.getElementById("peerId")
+const pasteBtn=document.getElementById("pasteBtn")
+const sendBtn=document.getElementById("sendBtn")
+const messageInput=document.getElementById("messageInput")
+
+let username=""
+
+const animals=[
+"Kucing","Anjing","Kelinci","Burung","Kuda",
+"Kambing","Domba","Ayam","Bebek","Ikan",
+"Panda","Rubah","Singa","Harimau","Gajah",
+"Ular","KuraKura","Koala","Serigala","Elang"
+]
+
+const colors=[
+"Merah","Biru","Hijau","Kuning","Hitam",
+"Putih","Ungu","Oranye","Coklat","Pink",
+"Emas","Perak","Abu","Toska","Magenta"
+]
+
+function generateName(){
+
+const animal=animals[Math.floor(Math.random()*animals.length)]
+const color=colors[Math.floor(Math.random()*colors.length)]
+const number=Math.floor(Math.random()*1000).toString().padStart(3,"0")
+
+return animal+color+number
+
 }
 
-// =======================
-// COPY MAGNET
-// =======================
-function copyMagnet(){
-  const magnet = document.getElementById("magnet").value;
-  if(!magnet) return;
-  navigator.clipboard.writeText(magnet);
-  log("📋 Magnet disalin");
-  document.getElementById("info").textContent = "📋 Magnet disalin";
+let savedName=localStorage.getItem("chatUsername")
+
+if(!savedName){
+savedName=generateName()
+localStorage.setItem("chatUsername",savedName)
 }
 
-// =======================
-// SEED FILE (UPLOADER)
-// =======================
-function seedFile(){
-  const input = document.getElementById("fileInput");
-  if(!input.files.length){
-    alert("Pilih file dulu");
-    return;
-  }
+username=savedName
 
-  const file = input.files[0];
-  uploadedBytes = 0;
-
-  document.getElementById("info").textContent = "🌱 Membuat torrent...";
-  log("📁 File: "+file.name);
-
-  client.seed(file, torrent=>{
-    currentTorrent = torrent;
-    document.getElementById("magnet").value = torrent.magnetURI;
-    document.getElementById("copyBtn").disabled = false;
-
-    document.getElementById("seedStatus").textContent = "AKTIF (Seeder)";
-    document.getElementById("fileCount").textContent = torrent.files.length;
-	
-	document.getElementById("shareBtn").disabled = false;
-
-
-    log("🧲 Magnet siap");
-    log("🌱 Seeding dimulai");
-
-    bindSeederStats(torrent);
-  });
+function formatTime(t){
+const d=new Date(t)
+return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")
 }
 
-// =======================
-// DOWNLOAD → AUTO SEED
-// =======================
-function download(){
-  const magnet = document.getElementById("magnet").value.trim();
-  if(!magnet){
-    alert("Paste magnet dulu");
-    return;
-  }
+function render(){
 
-  client.add(magnet, torrent=>{
-    currentTorrent = torrent;
-    uploadedBytes = 0;
+chat.innerHTML=""
 
-    document.getElementById("info").textContent = "⬇️ Download dimulai";
-    log("⬇️ Download dimulai");
+chatLog.forEach(m=>{
 
-    torrent.on("download", ()=>{
-      const p = Math.round(torrent.progress*100);
-      document.getElementById("info").textContent =
-        `⬇️ Download ${p}%`;
-    });
+const div=document.createElement("div")
+div.className="message "+(m.user===username?"me":"other")
 
-    torrent.on("done", ()=>{
-      log("✅ Download selesai");
-      log("🌱 Beralih ke mode SEEDER");
+div.innerHTML=`
+<div>${m.user}: ${m.text}</div>
+<div class="meta">${formatTime(m.time)}</div>
+`
 
-      document.getElementById("info").textContent =
-        "🌱 Download selesai · Ikut seeding";
+chat.appendChild(div)
 
-      document.getElementById("seedStatus").textContent =
-        "AKTIF (Seeder)";
-      document.getElementById("fileCount").textContent =
-        torrent.files.length;
+})
 
-      // AUTO SAVE FILE
-      torrent.files.forEach(file=>{
-        file.getBlob((err,blob)=>{
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = file.name;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          log("💾 File tersimpan: "+file.name);
-        });
-      });
+chat.scrollTop=chat.scrollHeight
 
-      bindSeederStats(torrent);
-    });
-  });
 }
 
-// =======================
-// COMMON SEEDER STATS
-// =======================
-function bindSeederStats(torrent){
-  torrent.on("wire", ()=>{
-    document.getElementById("peerCount").textContent =
-      torrent.numPeers;
-    log("🔗 Peer terhubung ("+torrent.numPeers+")");
-  });
-
-  torrent.on("upload", bytes=>{
-    uploadedBytes += bytes;
-    document.getElementById("uploaded").textContent =
-      format(uploadedBytes);
-    document.getElementById("upSpeed").textContent =
-      format(torrent.uploadSpeed)+"/s";
-  });
+function broadcast(msg){
+connections.forEach(c=>{
+if(c.open) c.send(msg)
+})
 }
 
+sendBtn.onclick=()=>{
 
-async function shareMagnet(){
-  const magnet = document.getElementById("magnet").value.trim();
-  if(!magnet){
-    alert("Magnet belum tersedia");
-    return;
-  }
+const text=messageInput.value.trim()
 
-  const TOKEN = "8384730708:AAHjPCLYpW7wz2B5-jBxMJ17-kH1G1zXZuY";
-  const CHANNEL_ID = "-1003689025820";
-  const URL = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+if(!text) return
 
-  document.getElementById("info").textContent =
-    "📤 Mengirim magnet ke Telegram...";
-
-  try{
-    const res = await fetch(URL,{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({
-        chat_id: CHANNEL_ID,
-        text: magnet,
-        disable_web_page_preview: true
-      })
-    });
-
-    const json = await res.json();
-    if(!json.ok) throw new Error(json.description);
-
-    log("🚀 Magnet terkirim");
-    document.getElementById("info").textContent =
-      "✅ Magnet berhasil dibagikan";
-
-  }catch(err){
-    log("❌ Gagal kirim magnet");
-    document.getElementById("info").textContent =
-      "❌ Error: " + err.message;
-  }
+const msg={
+user:username,
+text:text,
+time:Date.now()
 }
+
+chatLog.push(msg)
+
+render()
+
+broadcast({type:"chat",msg})
+
+messageInput.value=""
+
+}
+
+peer.on("open",id=>{
+myId.value=id
+
+chatLog.push({
+user:"System",
+text:"Peer siap: "+id,
+time:Date.now()
+})
+
+render()
+
+})
+
+peer.on("connection",conn=>{
+setup(conn)
+})
+
+copyBtn.onclick=()=>{
+navigator.clipboard.writeText(myId.value)
+copyBtn.innerText="Copied"
+setTimeout(()=>copyBtn.innerText="Copy",1200)
+}
+
+pasteBtn.onclick=async()=>{
+
+try{
+
+const text=await navigator.clipboard.readText()
+
+peerId.value=text.trim()
+
+autoConnect()
+
+}catch{
+
+alert("Clipboard tidak bisa diakses")
+
+}
+
+}
+
+function autoConnect(){
+
+const id=peerId.value.trim()
+
+if(!id) return
+
+if(id===myId.value){
+alert("Tidak bisa connect ke diri sendiri")
+return
+}
+
+const conn=peer.connect(id)
+
+setup(conn)
+
+}
+
+peerId.addEventListener("input",autoConnect)
+
+function setup(conn){
+
+connections.push(conn)
+
+conn.on("open",()=>{
+
+chatLog.push({
+user:"System",
+text:"Terhubung: "+conn.peer,
+time:Date.now()
+})
+
+render()
+
+conn.send({type:"sync",chatLog})
+
+})
+
+conn.on("data",data=>{
+
+if(data.type==="chat"){
+chatLog.push(data.msg)
+render()
+}
+
+if(data.type==="sync"){
+chatLog=data.chatLog
+render()
+}
+
+})
+
+conn.on("close",()=>{
+
+chatLog.push({
+user:"System",
+text:"Peer terputus",
+time:Date.now()
+})
+
+render()
+
+connections=connections.filter(c=>c!==conn)
+
+})
+
+}
+
 </script>
 
 </body>
