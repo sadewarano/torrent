@@ -1,132 +1,36 @@
 <!DOCTYPE html>
 <html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-
-<title>Input Data</title>
-
-<style>
-
-body{
-font-family:system-ui;
-background:#f3f4f6;
-padding:20px;
-}
-
-.box{
-max-width:500px;
-margin:auto;
-background:white;
-padding:20px;
-border-radius:10px;
-box-shadow:0 4px 10px rgba(0,0,0,0.1);
-}
-
-input{
-width:100%;
-padding:10px;
-border:1px solid #ccc;
-border-radius:6px;
-}
-
-button{
-margin-top:10px;
-padding:10px;
-border:none;
-background:#2563eb;
-color:white;
-border-radius:6px;
-cursor:pointer;
-}
-
-table{
-margin-top:20px;
-width:100%;
-border-collapse:collapse;
-}
-
-td,th{
-border:1px solid #ddd;
-padding:8px;
-font-size:14px;
-}
-
-</style>
-
-</head>
-
 <body>
 
-<div class="box">
-
-<h3>Input Kode</h3>
-
-<input id="kode" placeholder="Masukkan kode">
-
+<input id="kode" placeholder="masukkan kode">
 <button onclick="kirim()">Kirim</button>
 
-<button onclick="lihat()">Lihat Data</button>
-
-<table>
-
-<thead>
-<tr>
-<th>Waktu</th>
-<th>Kode</th>
-</tr>
-</thead>
-
+<table border="1">
 <tbody id="hasil"></tbody>
-
 </table>
-
-</div>
 
 <script>
 
 const API="https://script.google.com/macros/s/AKfycbwU3k3QpUNzeeyt9R4sOxKgyzvcjYKlj37hPR8035w7wRZHc-C_ZQr1Cu3k1pT4DBJqCg/exec";
 
-async function kirim(){
-
-let kode=document.getElementById("kode").value.trim();
-
-if(!kode){
-alert("Masukkan kode dulu");
-return;
-}
-
-await fetch(API,{
+function kirim(){
+fetch(API,{
 method:"POST",
-body:JSON.stringify({kode:kode})
+body:JSON.stringify({kode:kode.value})
 });
-
-document.getElementById("kode").value="";
-
-alert("Data tersimpan");
-
+kode.value="";
 }
 
-async function lihat(){
-
-let res=await fetch(API);
-
-let data=await res.json();
-
-let html="";
-
-data.forEach(d=>{
-
-html += "<tr>"+
-"<td>"+d.waktu+"</td>"+
-"<td>"+d.kode+"</td>"+
-"</tr>";
-
+function ambil(){
+fetch(API)
+.then(r=>r.json())
+.then(d=>{
+hasil.innerHTML=d.map(x=>`<tr><td>${x.waktu}</td><td>${x.kode}</td></tr>`).join("");
 });
-
-document.getElementById("hasil").innerHTML=html;
-
 }
+
+ambil();
+setInterval(ambil,3000);
 
 </script>
 
