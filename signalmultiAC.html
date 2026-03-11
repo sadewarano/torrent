@@ -9,62 +9,58 @@
 
 <style>
 body{
-  font-family:system-ui;
-  background:#f4f6f9;
-  margin:0;
+font-family:system-ui;
+background:#f4f6f9;
+margin:0;
 }
 
 header{
-  background:#111827;
-  color:white;
-  padding:20px;
-  text-align:center;
+background:#111827;
+color:white;
+padding:20px;
+text-align:center;
 }
 
 .container{
-  max-width:100%;
-  margin:auto;
-  padding:10px;
-  box-sizing:border-box;
+max-width:100%;
+margin:auto;
+padding:10px;
+box-sizing:border-box;
 }
 
 .card{
-  background:white;
-  padding:15px;
-  border-radius:10px;
-  margin-bottom:15px;
-  box-shadow:0 4px 12px rgba(0,0,0,.06);
+background:white;
+padding:15px;
+border-radius:10px;
+margin-bottom:15px;
+box-shadow:0 4px 12px rgba(0,0,0,.06);
 }
 
 input,button{
-  width:100%;
-  padding:12px;
-  margin-top:8px;
-  border-radius:6px;
-  border:1px solid #ccc;
-  box-sizing:border-box;
-  font-size:16px;
+width:100%;
+padding:12px;
+margin-top:8px;
+border-radius:6px;
+border:1px solid #ccc;
+box-sizing:border-box;
+font-size:16px;
 }
 
 button{
-  background:#2563eb;
-  color:white;
-  border:none;
-  cursor:pointer;
-}
-
-button:active{
-  background:#1e4fd8;
+background:#2563eb;
+color:white;
+border:none;
+cursor:pointer;
 }
 
 #chat{
-  background:#0f172a;
-  color:white;
-  padding:10px;
-  height:40vh;
-  overflow-y:auto;
-  font-family:monospace;
-  border-radius:6px;
+background:#0f172a;
+color:white;
+padding:10px;
+height:40vh;
+overflow-y:auto;
+font-family:monospace;
+border-radius:6px;
 }
 
 .copyRow{
@@ -103,7 +99,7 @@ flex:1;
 }
 
 .connectRow button{
-width:90px;
+width:80px;
 }
 
 input{
@@ -112,22 +108,6 @@ min-width:0;
 
 #myId{
 font-size:12px;
-}
-
-@media (max-width:600px){
-
-header{padding:14px;}
-h1{font-size:18px;}
-.container{padding:8px;}
-.card{padding:12px;}
-
-input,button{
-font-size:15px;
-padding:10px;
-}
-
-#chat{height:45vh;}
-
 }
 </style>
 </head>
@@ -170,58 +150,25 @@ padding:10px;
 
 <script>
 
+const API="https://script.google.com/macros/s/AKfycbwU3k3QpUNzeeyt9R4sOxKgyzvcjYKlj37hPR8035w7wRZHc-C_ZQr1Cu3k1pT4DBJqCg/exec"
+
 let chatLog=[]
 let connections=[]
 
 const peer=new Peer()
 
 const chat=document.getElementById("chat")
-let username=""
 const myId=document.getElementById("myId")
 const peerId=document.getElementById("peerId")
 
 const pasteBtn=document.getElementById("pasteBtn")
-const sendBtn=document.getElementById("sendBtn")
-const messageInput=document.getElementById("messageInput")
-
 const shareBtn=document.getElementById("shareBtn")
 const ambilBtn=document.getElementById("ambilBtn")
 
-const URL_GAS="PASTE_URL_GAS_DISINI"
+const sendBtn=document.getElementById("sendBtn")
+const messageInput=document.getElementById("messageInput")
 
-/* ===== USERNAME ===== */
-
-const animals=[
-"Kucing","Anjing","Kelinci","Burung","Kuda",
-"Kambing","Domba","Ayam","Bebek","Ikan",
-"Panda","Rubah","Singa","Harimau","Gajah",
-"Ular","KuraKura","Koala","Serigala","Elang"
-]
-
-const colors=[
-"Merah","Biru","Hijau","Kuning","Hitam",
-"Putih","Ungu","Oranye","Coklat","Pink",
-"Emas","Perak","Abu","Toska","Magenta"
-]
-
-function generateName(){
-
-const animal=animals[Math.floor(Math.random()*animals.length)]
-const color=colors[Math.floor(Math.random()*colors.length)]
-const number=Math.floor(Math.random()*1000).toString().padStart(3,"0")
-
-return animal+color+number
-
-}
-
-let savedName=localStorage.getItem("chatUsername")
-
-if(!savedName){
-savedName=generateName()
-localStorage.setItem("chatUsername",savedName)
-}
-
-username=savedName
+let username="User"+Math.floor(Math.random()*999)
 
 function render(){
 chat.innerText = chatLog.map(m=>`${m.user}: ${m.text}`).join("\n")
@@ -238,19 +185,19 @@ sendBtn.onclick = ()=>{
 const text = messageInput.value.trim()
 if(!text) return
 
-const msg = {user: username||"anon", text, time: Date.now()}
+const msg = {user: username, text, time: Date.now()}
 
 chatLog.push(msg)
 render()
 
 broadcast({type:"chat", msg})
 
-messageInput.value = ""
+messageInput.value=""
 }
 
 peer.on("open", id=>{
-myId.value = id
-chatLog.push({user:"System", text:`Peer siap dengan ID: ${id}`})
+myId.value=id
+chatLog.push({user:"System",text:"Peer siap dengan ID: "+id})
 render()
 })
 
@@ -258,105 +205,18 @@ peer.on("connection", conn=>{
 setup(conn)
 })
 
-const copyBtn=document.getElementById("copyBtn")
-
-copyBtn.onclick=()=>{
-navigator.clipboard.writeText(myId.value)
-copyBtn.innerText="Copied"
-setTimeout(()=>{
-copyBtn.innerText="Copy"
-},1500)
-}
-
-/* ===== SHARE KE GAS ===== */
-
-shareBtn.onclick=()=>{
-
-fetch(URL_GAS,{
-method:"POST",
-body:JSON.stringify({
-kode:myId.value,
-time:Date.now()
-})
-})
-
-shareBtn.innerText="Shared"
-
-setTimeout(()=>{
-shareBtn.innerText="Share"
-},1500)
-
-}
-
-/* ===== AMBIL TERAKHIR DARI GAS ===== */
-
-ambilBtn.onclick=()=>{
-
-fetch(URL_GAS)
-.then(r=>r.json())
-.then(d=>{
-
-const last=d[d.length-1]
-
-if(!last)return
-
-navigator.clipboard.writeText(last.kode)
-
-ambilBtn.innerText="Copied"
-
-setTimeout(()=>{
-ambilBtn.innerText="Ambil"
-},1500)
-
-})
-
-}
-
-/* ===== PASTE ===== */
-
-pasteBtn.onclick = async ()=>{
-try{
-const text = await navigator.clipboard.readText()
-peerId.value = text.trim()
-autoConnect()
-}catch(err){
-alert("Clipboard tidak bisa diakses")
-}
-}
-
-function autoConnect(){
-
-const id = peerId.value.trim()
-
-if(!id) return
-
-if(id === myId.value){
-alert("Tidak bisa connect ke diri sendiri")
-return
-}
-
-const conn = peer.connect(id)
-
-setup(conn)
-
-}
-
-peerId.addEventListener("input", autoConnect)
-
 function setup(conn){
 
 connections.push(conn)
 
-conn.on("open", ()=>{
-
-chatLog.push({user:"System", text:`Terhubung dengan ${conn.peer}`})
+conn.on("open",()=>{
+chatLog.push({user:"System",text:"Terhubung dengan "+conn.peer})
 render()
 
-conn.send({type:"sync", chatLog})
-
+conn.send({type:"sync",chatLog})
 })
 
-conn.on("data", data=>{
+conn.on("data",data=>{
 
 if(data.type==="chat"){
 chatLog.push(data.msg)
@@ -370,12 +230,102 @@ render()
 
 })
 
-conn.on("close", ()=>{
-
-chatLog.push({user:"System", text:`Peer ${conn.peer} terputus`})
+conn.on("close",()=>{
+chatLog.push({user:"System",text:"Peer "+conn.peer+" terputus"})
 render()
 
-connections = connections.filter(c => c !== conn)
+connections = connections.filter(c=>c!==conn)
+})
+
+}
+
+copyBtn.onclick=()=>{
+navigator.clipboard.writeText(myId.value)
+
+copyBtn.innerText="Copied"
+
+setTimeout(()=>{
+copyBtn.innerText="Copy"
+},1500)
+}
+
+pasteBtn.onclick = async ()=>{
+
+try{
+
+const text = await navigator.clipboard.readText()
+
+peerId.value = text.trim()
+
+autoConnect()
+
+}catch{
+
+alert("Clipboard tidak bisa diakses")
+
+}
+
+}
+
+function autoConnect(){
+
+const id = peerId.value.trim()
+
+if(!id) return
+
+if(id===myId.value){
+alert("Tidak bisa connect ke diri sendiri")
+return
+}
+
+const conn = peer.connect(id)
+
+setup(conn)
+
+}
+
+peerId.addEventListener("input", autoConnect)
+
+
+// ===== SHARE KE GAS =====
+
+shareBtn.onclick=()=>{
+
+fetch(API,{
+method:"POST",
+body:JSON.stringify({kode:myId.value})
+})
+
+shareBtn.innerText="Shared"
+
+setTimeout(()=>{
+shareBtn.innerText="Share"
+},1500)
+
+}
+
+
+// ===== AMBIL DATA TERAKHIR =====
+
+ambilBtn.onclick=()=>{
+
+fetch(API)
+.then(r=>r.json())
+.then(d=>{
+
+if(!d.length) return
+
+const last = d[d.length-1].kode
+
+navigator.clipboard.writeText(last)
+
+peerId.value=last
+
+ambilBtn.innerText="Copied"
+
+setTimeout(()=>{
+ambilBtn.innerText="Ambil"
+},1500)
 
 })
 
