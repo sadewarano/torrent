@@ -1,90 +1,170 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P Mobile Ready - Kirim Kode</title>
+<style>
+  body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: #f4f4f4;
+    padding: 10px;
+  }
+
+  .container {
+    max-width: 500px;
+    margin: auto;
+    background: #fff;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  }
+
+  input, button {
+    width: 100%;
+    padding: 12px;
+    margin: 6px 0;
+    font-size: 16px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+  }
+
+  button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background-color: #45a049;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 10px;
+    margin: 6px 0;
+  }
+
+  .btn-group button {
+    flex: 1;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+
+  table, th, td {
+    border: 1px solid #ccc;
+  }
+
+  th, td {
+    padding: 10px;
+    text-align: left;
+    font-size: 14px;
+    word-break: break-word;
+  }
+
+  @media (max-width: 400px) {
+    th, td {
+      font-size: 12px;
+      padding: 8px;
+    }
+    input, button {
+      font-size: 14px;
+      padding: 10px;
+    }
+  }
+</style>
+</head>
 <body>
+<div class="container">
+  <input id="kode" placeholder="Masukkan kode">
 
-<input id="kode" placeholder="Masukkan kode">
-<button onclick="kirim()">Kirim</button>
-<button onclick="hapusSemua()">Hapus Semua</button>
-<button id="ambilBtn">Ambil Peer ID</button>
+  <div class="btn-group">
+    <button id="kirimBtn">Kirim</button>
+  </div>
 
-<table border="1">
-  <tbody id="hasil"></tbody>
-</table>
+  <button id="ambilBtn">Ambil Peer ID</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Waktu</th>
+        <th>Kode</th>
+      </tr>
+    </thead>
+    <tbody id="hasil"></tbody>
+  </table>
+</div>
 
 <script>
 const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
 
-function kirim(){
-  if(!kode.value.trim()) return;
-  fetch(API,{
-    method:"POST",
-    headers: {"Content-Type":"application/json"},
-    body:JSON.stringify({kode:kode.value.trim()})
-  });
-  kode.value="";
-}
-
-function hapusSemua(){
-  fetch(API,{
-    method:"POST",
-    headers: {"Content-Type":"application/json"},
-    body:JSON.stringify({reset:true})
-  })
-  .then(()=>ambil());
-}
-
-function ambil(){
-  fetch(API+"?t="+Date.now())
-    .then(r=>r.json())
-    .then(d=>{
-      if(!d) {
-        hasil.innerHTML="";
-        return;
-      }
-
-      let lastData = null;
-
-      if(Array.isArray(d) && d.length){
-        lastData = d[d.length - 1]; // ambil baris terakhir
-      } else if(d && d.kode){
-        lastData = d; // object tunggal
-      }
-
-      if(lastData){
-        hasil.innerHTML=`<tr><td>${lastData.waktu}</td><td>${lastData.kode}</td></tr>`;
-      } else {
-        hasil.innerHTML="";
-      }
-    });
-}
-
-// ambil data setiap 3 detik
-ambil();
-setInterval(ambil,3000);
-
-// ===== Tombol Ambil Peer ID dari Tabel =====
-const ambilBtn = document.getElementById("ambilBtn");
-ambilBtn.onclick = async () => {
+// ===== Fungsi =====
+async function kirim() {
+  const kodeInput = document.getElementById("kode");
+  if(!kodeInput.value.trim()) return;
   try {
-    const table = document.getElementById("hasil");
-    const rows = table.getElementsByTagName("tr");
-    if(rows.length === 0){
-      alert("Belum ada data Peer ID");
-      return;
-    }
-    const lastRow = rows[rows.length - 1];
-    const peerId = lastRow.cells[1].innerText;
-
-    // salin ke clipboard
-    await navigator.clipboard.writeText(peerId);
-    alert("Peer ID disalin: " + peerId);
-
-  } catch (err) {
-    console.error("Gagal ambil Peer ID dari tabel:", err);
-    alert("Gagal ambil data dari tabel");
+    await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({kode: kodeInput.value.trim()})
+    });
+    kodeInput.value = "";
+    alert("Kode berhasil dikirim!");
+  } catch(err) {
+    console.error(err);
+    alert("Gagal kirim kode!");
   }
-};
-</script>
+}
 
+async function ambil() {
+  try {
+    const res = await fetch(API + "?t=" + Date.now());
+    const d = await res.json();
+    const hasil = document.getElementById("hasil");
+    hasil.innerHTML = "";
+    let lastData = null;
+
+    if(Array.isArray(d) && d.length){
+      d.forEach(item=>{
+        hasil.innerHTML += `<tr><td>${item.waktu}</td><td>${item.kode}</td></tr>`;
+      });
+      lastData = d[d.length-1];
+    } else if(d && d.kode){
+      hasil.innerHTML = `<tr><td>${d.waktu}</td><td>${d.kode}</td></tr>`;
+      lastData = d;
+    }
+    return lastData;
+  } catch(err) {
+    console.error(err);
+    return null;
+  }
+}
+
+// ===== Tombol Event Listener =====
+document.getElementById("kirimBtn").addEventListener("click", kirim);
+
+document.getElementById("ambilBtn").addEventListener("click", async () => {
+  const table = document.getElementById("hasil");
+  const rows = table.getElementsByTagName("tr");
+  if(rows.length === 0){
+    alert("Belum ada data Peer ID");
+    return;
+  }
+  const lastRow = rows[rows.length-1];
+  const peerId = lastRow.cells[1].innerText;
+  await navigator.clipboard.writeText(peerId);
+  alert("Peer ID disalin: " + peerId);
+});
+
+// ===== Auto ambil data setiap 3 detik =====
+ambil();
+setInterval(ambil, 3000);
+</script>
 </body>
 </html>
