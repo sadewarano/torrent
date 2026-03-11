@@ -8,107 +8,23 @@
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <style>
-body{
-font-family:system-ui;
-background:#f4f6f9;
-margin:0;
-}
-
-header{
-background:#111827;
-color:white;
-padding:20px;
-text-align:center;
-}
-
-.container{
-max-width:100%;
-margin:auto;
-padding:10px;
-box-sizing:border-box;
-}
-
-.card{
-background:white;
-padding:15px;
-border-radius:10px;
-margin-bottom:15px;
-box-shadow:0 4px 12px rgba(0,0,0,.06);
-}
-
-input,button{
-width:100%;
-padding:12px;
-margin-top:8px;
-border-radius:6px;
-border:1px solid #ccc;
-box-sizing:border-box;
-font-size:16px;
-}
-
-button{
-background:#2563eb;
-color:white;
-border:none;
-cursor:pointer;
-}
-
-#chat{
-background:#0f172a;
-color:white;
-padding:10px;
-height:40vh;
-overflow-y:auto;
-font-family:monospace;
-border-radius:6px;
-}
-
-.copyRow{
-display:flex;
-align-items:center;
-gap:6px;
-}
-
-.copyRow p{
-margin:0;
-white-space:nowrap;
-}
-
-.copyRow input{
-flex:1;
-}
-
-.copyRow button{
-width:70px;
-}
-
-.connectRow{
-display:flex;
-align-items:center;
-gap:6px;
-margin-top:8px;
-}
-
-.connectRow p{
-margin:0;
-white-space:nowrap;
-}
-
-.connectRow input{
-flex:1;
-}
-
-.connectRow button{
-width:80px;
-}
-
-input{
-min-width:0;
-}
-
-#myId{
-font-size:12px;
-}
+body{font-family:system-ui;background:#f4f6f9;margin:0;}
+header{background:#111827;color:white;padding:20px;text-align:center;}
+.container{max-width:100%;margin:auto;padding:10px;box-sizing:border-box;}
+.card{background:white;padding:15px;border-radius:10px;margin-bottom:15px;box-shadow:0 4px 12px rgba(0,0,0,.06);}
+input,button{width:100%;padding:12px;margin-top:8px;border-radius:6px;border:1px solid #ccc;box-sizing:border-box;font-size:16px;}
+button{background:#2563eb;color:white;border:none;cursor:pointer;}
+#chat{background:#0f172a;color:white;padding:10px;height:40vh;overflow-y:auto;font-family:monospace;border-radius:6px;}
+.copyRow{display:flex;align-items:center;gap:6px;}
+.copyRow p{margin:0;white-space:nowrap;}
+.copyRow input{flex:1;}
+.copyRow button{width:70px;}
+.connectRow{display:flex;align-items:center;gap:6px;margin-top:8px;}
+.connectRow p{margin:0;white-space:nowrap;}
+.connectRow input{flex:1;}
+.connectRow button{width:80px;}
+input{min-width:0;}
+#myId{font-size:12px;}
 </style>
 </head>
 
@@ -171,168 +87,141 @@ const messageInput=document.getElementById("messageInput")
 let username="User"+Math.floor(Math.random()*999)
 
 function render(){
-chat.innerText = chatLog.map(m=>`${m.user}: ${m.text}`).join("\n")
-chat.scrollTop = chat.scrollHeight
+  chat.innerText = chatLog.map(m=>`${m.user}: ${m.text}`).join("\n")
+  chat.scrollTop = chat.scrollHeight
 }
 
 function broadcast(msg){
-connections.forEach(c=>{
-if(c.open) c.send(msg)
-})
+  connections.forEach(c=>{
+    if(c.open) c.send(msg)
+  })
 }
 
 sendBtn.onclick = ()=>{
-const text = messageInput.value.trim()
-if(!text) return
+  const text = messageInput.value.trim()
+  if(!text) return
 
-const msg = {user: username, text, time: Date.now()}
+  const msg = {user: username, text, time: Date.now()}
 
-chatLog.push(msg)
-render()
+  chatLog.push(msg)
+  render()
 
-broadcast({type:"chat", msg})
+  broadcast({type:"chat", msg})
 
-messageInput.value=""
+  messageInput.value=""
 }
 
 peer.on("open", id=>{
-myId.value=id
-chatLog.push({user:"System",text:"Peer siap dengan ID: "+id})
-render()
+  myId.value=id
+  chatLog.push({user:"System",text:"Peer siap dengan ID: "+id})
+  render()
 })
 
 peer.on("connection", conn=>{
-setup(conn)
+  setup(conn)
 })
 
 function setup(conn){
+  connections.push(conn)
 
-connections.push(conn)
+  conn.on("open",()=>{
+    chatLog.push({user:"System",text:"Terhubung dengan "+conn.peer})
+    render()
+    conn.send({type:"sync",chatLog})
+  })
 
-conn.on("open",()=>{
-chatLog.push({user:"System",text:"Terhubung dengan "+conn.peer})
-render()
+  conn.on("data",data=>{
+    if(data.type==="chat"){
+      chatLog.push(data.msg)
+      render()
+    }
+    if(data.type==="sync"){
+      chatLog=data.chatLog
+      render()
+    }
+  })
 
-conn.send({type:"sync",chatLog})
-})
-
-conn.on("data",data=>{
-
-if(data.type==="chat"){
-chatLog.push(data.msg)
-render()
-}
-
-if(data.type==="sync"){
-chatLog=data.chatLog
-render()
-}
-
-})
-
-conn.on("close",()=>{
-chatLog.push({user:"System",text:"Peer "+conn.peer+" terputus"})
-render()
-
-connections = connections.filter(c=>c!==conn)
-})
-
+  conn.on("close",()=>{
+    chatLog.push({user:"System",text:"Peer "+conn.peer+" terputus"})
+    render()
+    connections = connections.filter(c=>c!==conn)
+  })
 }
 
 copyBtn.onclick=()=>{
-navigator.clipboard.writeText(myId.value)
-
-copyBtn.innerText="Copied"
-
-setTimeout(()=>{
-copyBtn.innerText="Copy"
-},1500)
+  navigator.clipboard.writeText(myId.value)
+  copyBtn.innerText="Copied"
+  setTimeout(()=>{copyBtn.innerText="Copy"},1500)
 }
 
 pasteBtn.onclick = async ()=>{
-
-try{
-
-const text = await navigator.clipboard.readText()
-
-peerId.value = text.trim()
-
-autoConnect()
-
-}catch{
-
-alert("Clipboard tidak bisa diakses")
-
-}
-
+  try{
+    const text = await navigator.clipboard.readText()
+    peerId.value = text.trim()
+    autoConnect()
+  }catch{
+    alert("Clipboard tidak bisa diakses")
+  }
 }
 
 function autoConnect(){
-
-const id = peerId.value.trim()
-
-if(!id) return
-
-if(id===myId.value){
-alert("Tidak bisa connect ke diri sendiri")
-return
-}
-
-const conn = peer.connect(id)
-
-setup(conn)
-
+  const id = peerId.value.trim()
+  if(!id) return
+  if(id===myId.value){
+    alert("Tidak bisa connect ke diri sendiri")
+    return
+  }
+  const conn = peer.connect(id)
+  setup(conn)
 }
 
 peerId.addEventListener("input", autoConnect)
 
-
 // ===== SHARE KE GAS =====
-
 shareBtn.onclick=()=>{
-
-fetch(API,{
-method:"POST",
-body:JSON.stringify({kode:myId.value})
-})
-
-shareBtn.innerText="Shared"
-
-setTimeout(()=>{
-shareBtn.innerText="Share"
-},1500)
-
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({kode:myId.value})
+  })
+  shareBtn.innerText="Shared"
+  setTimeout(()=>{shareBtn.innerText="Share"},1500)
 }
 
-
 // ===== AMBIL DATA TERAKHIR =====
-
 ambilBtn.onclick = async () => {
   try {
-    const res = await fetch(API);
-    const data = await res.json();
-    // cek kalau data valid
-    if (!data || !data.kode) {
-      alert("Belum ada data di GAS");
-      return;
-    }
-    const lastPeerId = data.kode;
-    // jangan connect ke diri sendiri
-    if (lastPeerId === myId.value) return;
-    // salin ke clipboard
-    await navigator.clipboard.writeText(lastPeerId);
-    // isi input peerId dan auto connect
-    peerId.value = lastPeerId;
-    autoConnect();
-    // feedback tombol
-    ambilBtn.innerText = "Copied";
-    setTimeout(() => ambilBtn.innerText = "Ambil", 1500);
+    const res = await fetch(API+"?t="+Date.now())
+    const data = await res.json()
 
-  } catch (err) {
-    console.error("Gagal ambil data dari GAS:", err);
-    alert("Gagal ambil data dari GAS. Periksa koneksi atau publish GAS");
+    // Ambil Peer ID terbaru dari array atau object
+    let lastPeerId = null
+    if(Array.isArray(data) && data.length){
+      lastPeerId = data[data.length-1].kode
+    } else if(data && data.kode){
+      lastPeerId = data.kode
+    }
+
+    if(!lastPeerId){
+      alert("Belum ada data di GAS")
+      return
+    }
+
+    // Salin ke clipboard
+    await navigator.clipboard.writeText(lastPeerId)
+
+    // Isi input peerId dan auto connect
+    peerId.value = lastPeerId
+    autoConnect()
+
+    // Feedback tombol
+    ambilBtn.innerText = "Copied"
+    setTimeout(()=>{ambilBtn.innerText = "Ambil"},1500)
+
+  } catch(err){
+    console.error("Gagal ambil data dari GAS:",err)
+    alert("Gagal ambil data dari GAS. Periksa koneksi atau publish GAS")
   }
-};
+}
 
 </script>
 
