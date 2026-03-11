@@ -41,8 +41,20 @@ function ambil(){
         hasil.innerHTML="";
         return;
       }
-      // tampilkan di tabel
-      hasil.innerHTML=`<tr><td>${d.waktu}</td><td>${d.kode}</td></tr>`;
+
+      let lastData = null;
+
+      if(Array.isArray(d) && d.length){
+        lastData = d[d.length - 1]; // ambil baris terakhir
+      } else if(d && d.kode){
+        lastData = d; // object tunggal
+      }
+
+      if(lastData){
+        hasil.innerHTML=`<tr><td>${lastData.waktu}</td><td>${lastData.kode}</td></tr>`;
+      } else {
+        hasil.innerHTML="";
+      }
     });
 }
 
@@ -57,16 +69,22 @@ ambilBtn.onclick = async () => {
     const res = await fetch(API+"?t="+Date.now());
     const data = await res.json();
 
-    if(!data || !data.kode){
+    let lastPeerId = null;
+
+    if(Array.isArray(data) && data.length){
+      lastPeerId = data[data.length - 1].kode; // ambil Peer ID terbaru
+    } else if(data && data.kode){
+      lastPeerId = data.kode;
+    }
+
+    if(!lastPeerId){
       alert("Belum ada data di GAS");
       return;
     }
 
-    const peerId = data.kode;
-
     // salin ke clipboard
-    await navigator.clipboard.writeText(peerId);
-    alert("Peer ID disalin: " + peerId);
+    await navigator.clipboard.writeText(lastPeerId);
+    alert("Peer ID disalin: " + lastPeerId);
 
   } catch (err) {
     console.error("Gagal ambil Peer ID:", err);
