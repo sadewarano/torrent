@@ -85,6 +85,26 @@ flex:1;
 width:70px;
 }
 
+.connectRow{
+display:flex;
+align-items:center;
+gap:6px;
+margin-top:8px;
+}
+
+.connectRow p{
+margin:0;
+white-space:nowrap;
+}
+
+.connectRow input{
+flex:1;
+}
+
+.connectRow button{
+width:90px;
+}
+
 /* Responsive mobile */
 @media (max-width:600px){
   .card{
@@ -120,8 +140,9 @@ width:70px;
 <button id="copyBtn">Copy</button>
 </div>
 
-<p>Connect ke Peer:</p>
-<input id="peerId" placeholder="Masukkan Peer ID">
+<div class="connectRow">
+<p>Connect:</p>
+<input id="peerId" placeholder="Peer ID">
 <button id="connectBtn">Connect</button>
 </div>
 
