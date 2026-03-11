@@ -68,7 +68,13 @@ button:active{
 
 .copyRow{
 display:flex;
+align-items:center;
 gap:6px;
+}
+
+.copyRow p{
+margin:0;
+white-space:nowrap;
 }
 
 .copyRow input{
@@ -76,8 +82,7 @@ flex:1;
 }
 
 .copyRow button{
-width:80px;
-padding:10px;
+width:70px;
 }
 
 /* Responsive mobile */
@@ -109,10 +114,8 @@ padding:10px;
 <div class="container">
 
 <div class="card">
-<h3>Identitas</h3>
-<p>Public Key:</p>
-
 <div class="copyRow">
+<p>Public Key:</p>
 <input id="myId" readonly>
 <button id="copyBtn">Copy</button>
 </div>
