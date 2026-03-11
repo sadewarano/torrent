@@ -155,6 +155,7 @@ header{
     <input id="myId" readonly>
     <button id="copyBtn">Copy</button>
     <button id="shareBtn">Share</button>
+    <button id="ambilBtn">Ambil</button>
   </div>
 
   <div class="row">
@@ -190,6 +191,7 @@ const myId = document.getElementById("myId")
 const peerId = document.getElementById("peerId")
 const pasteBtn = document.getElementById("pasteBtn")
 const shareBtn = document.getElementById("shareBtn")
+const ambilBtn = document.getElementById("ambilBtn")
 const sendBtn = document.getElementById("sendBtn")
 const messageInput = document.getElementById("messageInput")
 
@@ -395,6 +397,29 @@ shareBtn.onclick = () => {
   setTimeout(()=>{
     shareBtn.innerText="Share"
   },1200)
+
+}
+
+ambilBtn.onclick = () => {
+
+  fetch(API)
+  .then(r=>r.json())
+  .then(d=>{
+
+    d.forEach(x=>{
+
+      const id = x.kode.trim()
+
+      if(id && id !== myId.value){
+
+        const conn = peer.connect(id)
+        setup(conn)
+
+      }
+
+    })
+
+  })
 
 }
 
