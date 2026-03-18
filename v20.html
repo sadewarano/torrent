@@ -3,170 +3,295 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mobile-Optimized HTML/JS Editor (Namespace + Notif)</title>
+<title>Multi Editor Stable</title>
+
 <style>
-  body, html {margin:0;padding:0;font-family:system-ui,sans-serif;height:100%;display:flex;flex-direction:column;background:#f9f9f9;}
-  #editorContainer{padding:10px;background:#fff;border-bottom:1px solid #ccc;}
-  textarea{width:100%;min-height:120px;font-family:monospace;font-size:14px;padding:10px;box-sizing:border-box;border:1px solid #ccc;border-radius:5px;resize:vertical;margin-top:5px;}
-  .button-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
-  button{flex:1 1 auto;padding:10px;font-size:16px;cursor:pointer;min-width:90px;border-radius:5px;border:1px solid #888;}
-  select{margin-top:10px;padding:8px;font-size:16px;width:100%;border-radius:5px;border:1px solid #888;}
-  #output{flex-grow:1;width:100%;border:none;margin-top:5px;}
-  .notif{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);background:#323232;color:white;padding:10px 20px;border-radius:5px;opacity:0.95;z-index:999;display:none;}
-  @media(max-width:500px){button{font-size:14px;padding:8px;min-width:70px;}textarea{font-size:13px;}}
+body, html {
+  margin:0;
+  padding:0;
+  font-family:system-ui,sans-serif;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  background:#f9f9f9;
+}
+
+#editorContainer{
+  padding:10px;
+  background:#fff;
+  border-bottom:1px solid #ccc;
+}
+
+textarea{
+  width:100%;
+  min-height:140px;
+  font-family:monospace;
+  font-size:14px;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  margin-top:5px;
+}
+
+.button-row{
+  display:flex;
+  gap:5px;
+  margin-top:10px;
+  flex-wrap:wrap;
+}
+
+button, select{
+  flex:1;
+  padding:10px;
+  font-size:14px;
+  border-radius:8px;
+  border:1px solid #888;
+}
+
+.top-bar{
+  position:sticky;
+  top:0;
+  background:#fff;
+  z-index:10;
+}
+
+#output{
+  flex:1;
+  border:none;
+}
+
+/* notif */
+.notif{
+  position:fixed;
+  bottom:10px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#333;
+  color:#fff;
+  padding:10px;
+  border-radius:6px;
+  display:none;
+}
 </style>
 </head>
+
 <body>
 
 <div id="editorContainer">
-  <button onclick="toggleEditor()">🔽 Toggle Input</button>
 
-  <textarea id="codeInput" placeholder="Tulis kode HTML/JS di sini..."></textarea>
+  <!-- TOP BAR -->
+  <div class="button-row top-bar">
+    <button onclick="toggleEditor()">🔽</button>
+    <button onclick="pasteCode()">📋</button>
 
-  <div class="button-row">
-    <button onclick="pasteCode()">📋 Paste</button>
-    <button onclick="runCode()">▶️ Run</button>
-    <button onclick="clearCode()">🗑️ Clear</button>
-    <button onclick="copyCode()">📋 Copy</button>
+    <!-- DROPDOWN NAMESPACE -->
+    <select id="namespaceSelect" onchange="changeNamespace()"></select>
   </div>
 
+  <!-- EDITOR -->
+  <textarea id="codeInput" placeholder="Tulis kode HTML/JS di sini..."></textarea>
+
+  <!-- RUN -->
+  <div class="button-row">
+    <button onclick="runCode()">▶️ Run</button>
+    <button onclick="clearCode()">🗑️</button>
+    <button onclick="copyCode()">📋</button>
+  </div>
+
+  <!-- PROJECT -->
   <div class="button-row">
     <button onclick="saveProject()">💾 Save</button>
     <button onclick="saveAsProject()">💾 Save As</button>
     <button onclick="renameProject()">✏️ Rename</button>
   </div>
 
-  <label for="projectSelect">Buka Proyek:</label>
-  <select id="projectSelect" onchange="loadSelectedProject()">
-    <option value="">-- Pilih proyek --</option>
-  </select>
-  <button style="width: 100%; margin-top: 5px;" onclick="deleteProject()">❌ Hapus Proyek</button>
+  <!-- SELECT PROJECT -->
+  <select id="projectSelect" onchange="loadSelectedProject()"></select>
+  <button onclick="deleteProject()">❌ Delete</button>
+
 </div>
 
-<iframe id="output"></iframe>
+<iframe id="output" sandbox="allow-scripts"></iframe>
 <div id="notif" class="notif"></div>
 
 <script>
-const NAMESPACE = "editor_v2_"; // prefix storage berbeda
-let defaultProjectCounter = 1;
+let NAMESPACE = "editor_v2_";
 
-// ===== Notifikasi =====
+// ===== NOTIF =====
 function showNotif(msg){
   const n = document.getElementById("notif");
   n.innerText = msg;
   n.style.display = "block";
-  setTimeout(()=>{ n.style.display = "none"; },2000);
+  setTimeout(()=> n.style.display="none",2000);
 }
 
-// ===== Fungsi editor =====
+// ===== EDITOR =====
 function runCode(){
-  document.getElementById('output').srcdoc = document.getElementById('codeInput').value;
+  output.srcdoc = codeInput.value;
 }
 
 function clearCode(){
-  document.getElementById('codeInput').value='';
-  document.getElementById('output').srcdoc='';
+  if(confirm("Clear?")){
+    codeInput.value='';
+    output.srcdoc='';
+  }
 }
 
 async function pasteCode(){
   try{
     const text = await navigator.clipboard.readText();
-    document.getElementById('codeInput').value = text;
-    showNotif("Kode berhasil ditempel");
-  }catch(err){ showNotif('Gagal membaca clipboard'); }
+    codeInput.value = text;
+    runCode();
+    showNotif("Paste & run");
+  }catch{
+    showNotif("Gagal paste");
+  }
 }
 
 async function copyCode(){
-  const code = document.getElementById('codeInput').value;
-  if(!code.trim()){ showNotif('Tidak ada kode untuk disalin'); return; }
-  try{
-    await navigator.clipboard.writeText(code);
-    showNotif('Kode berhasil disalin ke clipboard');
-  }catch(err){ showNotif('Gagal menyalin kode'); }
+  await navigator.clipboard.writeText(codeInput.value);
+  showNotif("Copied");
 }
 
 function toggleEditor(){
-  const editorContainer = document.getElementById('editorContainer');
-  Array.from(editorContainer.children).forEach(el=>{
-    if(el.tagName!=='BUTTON' || !el.textContent.includes('Toggle Input')){
-      el.style.display = (el.style.display==='none')?'block':'none';
+  const el = document.getElementById('editorContainer');
+  Array.from(el.children).forEach(child=>{
+    if(!child.classList.contains('top-bar')){
+      child.style.display = (child.style.display==='none')?'block':'none';
     }
   });
 }
 
-// ===== Storage =====
-function saveProject(){
-  const code = document.getElementById('codeInput').value;
-  if(!code.trim()){ showNotif('Kode kosong!'); return; }
-  const name = NAMESPACE+'project'+defaultProjectCounter;
-  localStorage.setItem(name, code);
-  defaultProjectCounter++;
-  showNotif(`Proyek tersimpan sebagai "${name.replace(NAMESPACE,'')}"`);
+// ===== NAMESPACE SYSTEM =====
+function saveNamespace(ns){
+  localStorage.setItem(ns + "__meta", "1");
+}
+
+function getNamespaces(){
+  const keys = Object.keys(localStorage);
+  const set = new Set();
+
+  keys.forEach(k=>{
+    if(k.endsWith("__meta")){
+      set.add(k.replace("__meta",""));
+    }
+  });
+
+  return Array.from(set);
+}
+
+function updateNamespaceList(){
+  const sel = document.getElementById("namespaceSelect");
+  sel.innerHTML="";
+
+  const list = getNamespaces();
+
+  list.forEach(ns=>{
+    const opt = document.createElement("option");
+    opt.value = ns;
+    opt.textContent = ns.replace("_","");
+    sel.appendChild(opt);
+  });
+
+  const newOpt = document.createElement("option");
+  newOpt.value = "NEW";
+  newOpt.textContent = "➕ New Editor";
+  sel.appendChild(newOpt);
+
+  sel.value = NAMESPACE;
+}
+
+function changeNamespace(){
+  const val = namespaceSelect.value;
+
+  if(val === "NEW"){
+    const name = prompt("Nama editor baru:");
+    if(!name) return;
+
+    const ns = name + "_";
+
+    saveNamespace(ns); // simpan permanen
+    NAMESPACE = ns;
+
+  }else{
+    NAMESPACE = val;
+  }
+
+  updateNamespaceList();
   updateProjectList();
+  showNotif("Switch: "+NAMESPACE);
+}
+
+// ===== STORAGE =====
+function getNextIndex(){
+  let i=1;
+  while(localStorage.getItem(NAMESPACE+'project'+i)) i++;
+  return i;
+}
+
+function saveProject(){
+  localStorage.setItem(NAMESPACE+'project'+getNextIndex(), codeInput.value);
+  updateProjectList();
+  showNotif("Saved");
 }
 
 function saveAsProject(){
-  const code = document.getElementById('codeInput').value;
-  if(!code.trim()){ showNotif('Kode kosong!'); return; }
-  const nameInput = prompt('Masukkan nama proyek:','project_custom');
-  if(!nameInput) return;
-  const name = NAMESPACE+nameInput;
-  localStorage.setItem(name, code);
-  showNotif(`Proyek tersimpan sebagai "${nameInput}"`);
+  const name = prompt("Nama:");
+  if(!name) return;
+
+  localStorage.setItem(NAMESPACE+name, codeInput.value);
   updateProjectList();
+  showNotif("Saved As");
 }
 
 function renameProject(){
-  const select = document.getElementById('projectSelect');
-  const oldName = select.value;
-  if(!oldName){ showNotif('Pilih proyek terlebih dahulu'); return; }
-  const newNameInput = prompt('Nama baru:', oldName.replace(NAMESPACE,''));
-  if(!newNameInput) return;
-  const newName = NAMESPACE+newNameInput;
-  if(localStorage.getItem(newName)){ showNotif('Nama proyek sudah ada'); return; }
-  const code = localStorage.getItem(oldName);
-  localStorage.setItem(newName, code);
-  localStorage.removeItem(oldName);
-  showNotif(`"${oldName.replace(NAMESPACE,'')}" diganti menjadi "${newNameInput}"`);
+  const old = projectSelect.value;
+  if(!old) return;
+
+  const name = prompt("Rename:");
+  if(!name) return;
+
+  const code = localStorage.getItem(old);
+  localStorage.setItem(NAMESPACE+name, code);
+  localStorage.removeItem(old);
+
   updateProjectList();
+  showNotif("Renamed");
 }
 
 function loadSelectedProject(){
-  const name = document.getElementById('projectSelect').value;
-  if(!name) return;
-  const code = localStorage.getItem(name);
-  if(code!==null){
-    document.getElementById('codeInput').value = code;
-    runCode();
-    showNotif(`Proyek "${name.replace(NAMESPACE,'')}" dimuat`);
-  }
+  const code = localStorage.getItem(projectSelect.value);
+  codeInput.value = code;
+  runCode();
 }
 
 function deleteProject(){
-  const select = document.getElementById('projectSelect');
-  const name = select.value;
-  if(!name){ showNotif('Pilih proyek terlebih dahulu'); return; }
-  if(confirm(`Yakin ingin menghapus proyek "${name.replace(NAMESPACE,'')}"?`)){
-    localStorage.removeItem(name);
-    showNotif(`Proyek "${name.replace(NAMESPACE,'')}" dihapus`);
+  if(confirm("Delete?")){
+    localStorage.removeItem(projectSelect.value);
     updateProjectList();
+    showNotif("Deleted");
   }
 }
 
 function updateProjectList(){
-  const select = document.getElementById('projectSelect');
-  select.innerHTML='<option value="">-- Pilih proyek --</option>';
+  projectSelect.innerHTML="";
+
   Object.keys(localStorage)
-    .filter(k=>k.startsWith(NAMESPACE))
+    .filter(k=>k.startsWith(NAMESPACE) && !k.endsWith("__meta"))
     .forEach(k=>{
-      const option = document.createElement('option');
-      option.value=k;
-      option.textContent=k.replace(NAMESPACE,'');
-      select.appendChild(option);
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = k.replace(NAMESPACE,"");
+      projectSelect.appendChild(opt);
     });
 }
 
-// init
+// ===== INIT =====
+if(!localStorage.getItem("editor_v2___meta")){
+  saveNamespace("editor_v2_");
+}
+
+updateNamespaceList();
 updateProjectList();
 </script>
 
