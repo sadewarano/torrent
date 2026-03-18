@@ -3,121 +3,171 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mini WebTorrent Hybrid Peer</title>
-
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@0.115.0/webtorrent.min.js"></script>
-
+<title>Mobile-Optimized HTML/JS Editor (Namespace + Notif)</title>
 <style>
-body {
-  font-family: system-ui, Arial, sans-serif;
-  text-align: center;
-  padding: 15px;
-}
-input, button {
-  width: 100%;
-  max-width: 440px;
-  margin: 6px auto;
-  padding: 8px;
-  box-sizing: border-box;
-}
-video, audio {
-  width: 100%;
-  max-width: 440px;
-  margin-top: 10px;
-}
-.file {
-  border-top: 1px solid #ddd;
-  margin-top: 10px;
-  padding-top: 10px;
-}
+  body, html {margin:0;padding:0;font-family:system-ui,sans-serif;height:100%;display:flex;flex-direction:column;background:#f9f9f9;}
+  #editorContainer{padding:10px;background:#fff;border-bottom:1px solid #ccc;}
+  textarea{width:100%;min-height:120px;font-family:monospace;font-size:14px;padding:10px;box-sizing:border-box;border:1px solid #ccc;border-radius:5px;resize:vertical;margin-top:5px;}
+  .button-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
+  button{flex:1 1 auto;padding:10px;font-size:16px;cursor:pointer;min-width:90px;border-radius:5px;border:1px solid #888;}
+  select{margin-top:10px;padding:8px;font-size:16px;width:100%;border-radius:5px;border:1px solid #888;}
+  #output{flex-grow:1;width:100%;border:none;margin-top:5px;}
+  .notif{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);background:#323232;color:white;padding:10px 20px;border-radius:5px;opacity:0.95;z-index:999;display:none;}
+  @media(max-width:500px){button{font-size:14px;padding:8px;min-width:70px;}textarea{font-size:13px;}}
 </style>
 </head>
 <body>
 
-<h3>Mini WebTorrent Hybrid Peer</h3>
+<div id="editorContainer">
+  <button onclick="toggleEditor()">🔽 Toggle Input</button>
 
-<!-- SEED / UPLOAD -->
-<input type="file" id="fileInput" multiple>
-<p id="seedInfo"></p>
+  <textarea id="codeInput" placeholder="Tulis kode HTML/JS di sini..."></textarea>
 
-<hr>
+  <div class="button-row">
+    <button onclick="pasteCode()">📋 Paste</button>
+    <button onclick="runCode()">▶️ Run</button>
+    <button onclick="clearCode()">🗑️ Clear</button>
+    <button onclick="copyCode()">📋 Copy</button>
+  </div>
 
-<!-- JOIN SWARM -->
-<input type="text" id="magnetInput" placeholder="Magnet / Info-hash WebTorrent">
-<button id="joinBtn" disabled>Join Swarm</button>
+  <div class="button-row">
+    <button onclick="saveProject()">💾 Save</button>
+    <button onclick="saveAsProject()">💾 Save As</button>
+    <button onclick="renameProject()">✏️ Rename</button>
+  </div>
 
-<div id="viewer"></div>
-<div id="downloads"></div>
+  <label for="projectSelect">Buka Proyek:</label>
+  <select id="projectSelect" onchange="loadSelectedProject()">
+    <option value="">-- Pilih proyek --</option>
+  </select>
+  <button style="width: 100%; margin-top: 5px;" onclick="deleteProject()">❌ Hapus Proyek</button>
+</div>
+
+<iframe id="output"></iframe>
+<div id="notif" class="notif"></div>
 
 <script>
-const client = new WebTorrent();
-const $ = id => document.getElementById(id);
-let currentTorrent = null;
+const NAMESPACE = "editor_v2_"; // prefix storage berbeda
+let defaultProjectCounter = 1;
 
-/* ========== SEED ========== */
-$('fileInput').addEventListener('change', e => {
-  const files = [...e.target.files];
-  if (!files.length) return;
+// ===== Notifikasi =====
+function showNotif(msg){
+  const n = document.getElementById("notif");
+  n.innerText = msg;
+  n.style.display = "block";
+  setTimeout(()=>{ n.style.display = "none"; },2000);
+}
 
-  if (currentTorrent) currentTorrent.destroy();
+// ===== Fungsi editor =====
+function runCode(){
+  document.getElementById('output').srcdoc = document.getElementById('codeInput').value;
+}
 
-  client.seed(files, torrent => {
-    currentTorrent = torrent;
-    $('seedInfo').textContent = `Seeding ${files.length} file`;
-    $('magnetInput').value = torrent.magnetURI;
-    $('joinBtn').disabled = false;
+function clearCode(){
+  document.getElementById('codeInput').value='';
+  document.getElementById('output').srcdoc='';
+}
+
+async function pasteCode(){
+  try{
+    const text = await navigator.clipboard.readText();
+    document.getElementById('codeInput').value = text;
+    showNotif("Kode berhasil ditempel");
+  }catch(err){ showNotif('Gagal membaca clipboard'); }
+}
+
+async function copyCode(){
+  const code = document.getElementById('codeInput').value;
+  if(!code.trim()){ showNotif('Tidak ada kode untuk disalin'); return; }
+  try{
+    await navigator.clipboard.writeText(code);
+    showNotif('Kode berhasil disalin ke clipboard');
+  }catch(err){ showNotif('Gagal menyalin kode'); }
+}
+
+function toggleEditor(){
+  const editorContainer = document.getElementById('editorContainer');
+  Array.from(editorContainer.children).forEach(el=>{
+    if(el.tagName!=='BUTTON' || !el.textContent.includes('Toggle Input')){
+      el.style.display = (el.style.display==='none')?'block':'none';
+    }
   });
-});
+}
 
-/* ENABLE JOIN */
-$('magnetInput').oninput = () => {
-  $('joinBtn').disabled = !$('magnetInput').value.trim();
-};
+// ===== Storage =====
+function saveProject(){
+  const code = document.getElementById('codeInput').value;
+  if(!code.trim()){ showNotif('Kode kosong!'); return; }
+  const name = NAMESPACE+'project'+defaultProjectCounter;
+  localStorage.setItem(name, code);
+  defaultProjectCounter++;
+  showNotif(`Proyek tersimpan sebagai "${name.replace(NAMESPACE,'')}"`);
+  updateProjectList();
+}
 
-/* ========== JOIN / STREAM / DOWNLOAD ========== */
-$('joinBtn').onclick = () => {
-  const magnet = $('magnetInput').value.trim();
-  if (!magnet) return;
+function saveAsProject(){
+  const code = document.getElementById('codeInput').value;
+  if(!code.trim()){ showNotif('Kode kosong!'); return; }
+  const nameInput = prompt('Masukkan nama proyek:','project_custom');
+  if(!nameInput) return;
+  const name = NAMESPACE+nameInput;
+  localStorage.setItem(name, code);
+  showNotif(`Proyek tersimpan sebagai "${nameInput}"`);
+  updateProjectList();
+}
 
-  client.add(magnet, torrent => {
+function renameProject(){
+  const select = document.getElementById('projectSelect');
+  const oldName = select.value;
+  if(!oldName){ showNotif('Pilih proyek terlebih dahulu'); return; }
+  const newNameInput = prompt('Nama baru:', oldName.replace(NAMESPACE,''));
+  if(!newNameInput) return;
+  const newName = NAMESPACE+newNameInput;
+  if(localStorage.getItem(newName)){ showNotif('Nama proyek sudah ada'); return; }
+  const code = localStorage.getItem(oldName);
+  localStorage.setItem(newName, code);
+  localStorage.removeItem(oldName);
+  showNotif(`"${oldName.replace(NAMESPACE,'')}" diganti menjadi "${newNameInput}"`);
+  updateProjectList();
+}
 
-    torrent.files.forEach(file => {
-      const box = document.createElement('div');
-      box.className = 'file';
+function loadSelectedProject(){
+  const name = document.getElementById('projectSelect').value;
+  if(!name) return;
+  const code = localStorage.getItem(name);
+  if(code!==null){
+    document.getElementById('codeInput').value = code;
+    runCode();
+    showNotif(`Proyek "${name.replace(NAMESPACE,'')}" dimuat`);
+  }
+}
 
-      // STREAMING (HEMAT RAM)
-      if (file.name.match(/\.(mp4|webm|mp3)$/i)) {
-        const media = document.createElement(
-          file.name.match(/mp3$/) ? 'audio' : 'video'
-        );
-        media.controls = true;
-        file.appendTo(media);
-        box.appendChild(media);
-      }
+function deleteProject(){
+  const select = document.getElementById('projectSelect');
+  const name = select.value;
+  if(!name){ showNotif('Pilih proyek terlebih dahulu'); return; }
+  if(confirm(`Yakin ingin menghapus proyek "${name.replace(NAMESPACE,'')}"?`)){
+    localStorage.removeItem(name);
+    showNotif(`Proyek "${name.replace(NAMESPACE,'')}" dihapus`);
+    updateProjectList();
+  }
+}
 
-      // DOWNLOAD MANUAL
-      const btn = document.createElement('button');
-      btn.textContent = `Download ${file.name}`;
-
-      btn.onclick = () => {
-        btn.textContent = 'Menyiapkan file...';
-        file.getBlob((_, blob) => {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = file.name;
-          a.click();
-          btn.textContent = 'Download ulang';
-        });
-      };
-
-      box.appendChild(btn);
-      downloads.appendChild(box);
+function updateProjectList(){
+  const select = document.getElementById('projectSelect');
+  select.innerHTML='<option value="">-- Pilih proyek --</option>';
+  Object.keys(localStorage)
+    .filter(k=>k.startsWith(NAMESPACE))
+    .forEach(k=>{
+      const option = document.createElement('option');
+      option.value=k;
+      option.textContent=k.replace(NAMESPACE,'');
+      select.appendChild(option);
     });
+}
 
-  });
-};
-
-client.on('error', console.error);
+// init
+updateProjectList();
 </script>
 
 </body>
