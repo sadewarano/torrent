@@ -67,6 +67,24 @@ textarea{
     min-height:70px;
 }
 
+.link-box{
+    background:#f5f7fb;
+    padding:12px;
+    border-radius:10px;
+    word-break:break-all;
+}
+
+.link-box a{
+    color:#2563eb;
+    text-decoration:none;
+    font-size:14px;
+    line-height:1.5;
+}
+
+.link-box a:hover{
+    text-decoration:underline;
+}
+
 button{
     width:100%;
     margin-top:10px;
@@ -95,17 +113,42 @@ button:active{
         <p>Klik tombol untuk copy data</p>
     </div>
 
-    <!-- LINK PRODUK -->
+    <!-- LINK PRODUK 1 -->
     <div class="card">
         <div class="title">Link Produk 1</div>
-        <textarea readonly>https://vt.tokopedia.com/t/ZS9YQapQhN7WR-JVtO7/</textarea>
-        <button onclick="copyText(this)">Copy Link Produk 1</button>
+
+        <div class="link-box">
+            <a href="https://vt.tokopedia.com/t/ZS9YQapQhN7WR-JVtO7/" target="_blank">
+                https://vt.tokopedia.com/t/ZS9YQapQhN7WR-JVtO7/
+            </a>
+        </div>
+
+        <textarea id="link1" readonly style="position:absolute; left:-9999px;">
+https://vt.tokopedia.com/t/ZS9YQapQhN7WR-JVtO7/
+        </textarea>
+
+        <button onclick="copyById('link1', this)">
+            Copy Link Produk 1
+        </button>
     </div>
 
+    <!-- LINK PRODUK 2 -->
     <div class="card">
         <div class="title">Link Produk 2</div>
-        <textarea readonly>https://vt.tiktok.com/ZSxP7hyGD/</textarea>
-        <button onclick="copyText(this)">Copy Link Produk 2</button>
+
+        <div class="link-box">
+            <a href="https://vt.tiktok.com/ZSxP7hyGD/" target="_blank">
+                https://vt.tiktok.com/ZSxP7hyGD/
+            </a>
+        </div>
+
+        <textarea id="link2" readonly style="position:absolute; left:-9999px;">
+https://vt.tiktok.com/ZSxP7hyGD/
+        </textarea>
+
+        <button onclick="copyById('link2', this)">
+            Copy Link Produk 2
+        </button>
     </div>
 
     <!-- NAMA -->
@@ -150,11 +193,27 @@ function copyText(button){
 
     navigator.clipboard.writeText(textarea.value);
 
-    const originalText = button.innerText;
+    const original = button.innerText;
     button.innerText = "Berhasil Disalin ✓";
 
     setTimeout(() => {
-        button.innerText = originalText;
+        button.innerText = original;
+    }, 1500);
+}
+
+function copyById(id, button){
+    const textarea = document.getElementById(id);
+
+    textarea.select();
+    textarea.setSelectionRange(0, 99999);
+
+    navigator.clipboard.writeText(textarea.value);
+
+    const original = button.innerText;
+    button.innerText = "Berhasil Disalin ✓";
+
+    setTimeout(() => {
+        button.innerText = original;
     }, 1500);
 }
 </script>
