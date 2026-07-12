@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebTorrent + Save As</title>
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<style>
+body{font-family:system-ui;padding:16px;max-width:600px;margin:auto;background:#f5f5f5}
+input,button{width:100%;padding:12px;margin:8px 0;border-radius:8px;box-sizing:border-box}
+button{border:none;color:#fff;font-weight:600}
+.btn-copy{background:#2196F3}.btn-download{background:#FF9800}.btn-save{background:#009688}
+button:disabled{background:#aaa}
+.card{background:#fff;padding:12px;border-radius:8px;margin:10px 0}
+</style></head><body>
+<h2>📤 WebTorrent + Save As</h2>
+<input type="file" id="fileInput">
+<input id="magnet" placeholder="Tempel magnet / hash BTIH">
+<button class="btn-copy" id="copyBtn" disabled onclick="copyMagnet()">📋 Salin Magnet</button>
+<button class="btn-download" onclick="downloadTorrent()">⬇️ Download</button>
+<button class="btn-save" id="saveBtn" disabled onclick="saveFiles()">💾 Save As</button>
+<div class="card" id="info">ℹ️ Belum ada aktivitas</div>
+<div class="card">Mode: <span id="mode">Idle</span> | Progress: <span id="progress">0%</span> | Peer: <span id="peer">0</span></div>
+<script>
+const client=new WebTorrent();
+let currentTorrent=null,downloadedFiles=[];
+function log(t){info.textContent=t}
+function extractHash(v){let m=v.match(/btih:([a-f0-9]{40})/i);if(m)return m[1];if(/^[a-f0-9]{40}$/i.test(v))return v;return null;}
+function buildMagnet(h){let m='magnet:?xt=urn:btih:'+h;["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz"].forEach(tr=>m+="&tr="+encodeURIComponent(tr));return m;}
+fileInput.onchange=()=>{
+ let f=fileInput.files[0]; if(!f)return;
+ if(currentTorrent)currentTorrent.destroy();
+ log("🌱 Membuat torrent...");
+ client.seed(f,t=>{
+   currentTorrent=t;
+   magnet.value='magnet:?xt=urn:btih:'+t.infoHash;
+   copyBtn.disabled=false;
+   mode.textContent="Seeding";
+   log("✅ Magnet siap & seeding");
+   t.on("wire",()=>peer.textContent=t.numPeers);
+ });
+};
+function copyMagnet(){let h=extractHash(magnet.value);if(!h)return;navigator.clipboard.writeText("magnet:?xt=urn:btih:"+h);log("📋 Magnet disalin");}
+function downloadTorrent(){
+ let h=extractHash(magnet.value.trim()); if(!h){alert("Hash tidak valid");return;}
+ client.add(buildMagnet(h),t=>{
+   currentTorrent=t;mode.textContent="Downloading";
+   t.on("download",()=>{progress.textContent=Math.round(t.progress*100)+"%";peer.textContent=t.numPeers;});
+   t.on("wire",()=>peer.textContent=t.numPeers);
+   t.on("done",()=>{
+      downloadedFiles=t.files;
+      saveBtn.disabled=false;
+      mode.textContent="Seeder";
+      log("✅ Download selesai. Klik Save As untuk menyimpan.");
+   });
+ });
+}
+async function saveFiles() {
+  if (!downloadedFiles.length) {
+    log("⚠️ Belum ada file yang bisa disimpan.");
+    return;
+  }
+
+  for (const file of downloadedFiles) {
+    try {
+      file.getBlob((err, blob) => {
+        if (err) {
+          log("❌ Gagal mengambil file: " + err.message);
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+        log("💾 Mengunduh: " + file.name);
+      });
+
+    } catch (e) {
+      console.error(e);
+      log("❌ Error: " + e.message);
+    }
+  }
+}
+</script></body></html>
