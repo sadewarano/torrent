@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebShare - Kirim File P2P</title>
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#6366f1; --success:#22c55e; --warning:#f59e0b; --bg:#f1f5f9; --card:#fff; --text:#1e293b;}
+*{box-sizing:border-box;font-family:'Poppins',system-ui}
+body{background:var(--bg);margin:0;padding:16px;color:var(--text)}
+.container{max-width:650px;margin:auto}
+header{text-align:center;margin-bottom:20px}
+header h1{margin:0;font-size:24px;color:var(--primary)}
+.tabs{display:flex;background:var(--card);border-radius:12px;padding:4px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.tab{flex:1;padding:10px;text-align:center;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+.tab.active{background:var(--primary);color:#fff}
+.card{background:var(--card);padding:16px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+input[type=file]{width:100%;padding:10px;border:2px dashed #cbd5e1;border-radius:8px;background:#f8fafc;cursor:pointer}
+input[type=text]{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin:8px 0;font-size:14px}
+.btn{width:100%;padding:12px;border:none;border-radius:8px;font-weight:600;font-size:15px;cursor:pointer;margin-top:8px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-warning{background:var(--warning);color:#fff}
+.btn-success{background:var(--success);color:#fff}
+.btn:disabled{background:#94a3b8}
+.status-bar{display:flex;justify-content:space-between;font-size:13px;margin:10px 0;padding:10px;background:#f8fafc;border-radius:8px}
+.magnet-item{border:1px solid #e2e8f0;padding:12px;border-radius:10px;margin-bottom:10px;background:#fff}
+.magnet-hash{font-size:12px;word-break:break-all;color:#64748b;margin:6px 0}
+.info{padding:12px;background:#eff6ff;border-left:4px solid var(--primary);border-radius:6px;font-size:14px;margin:10px 0}
+#tab-content > div{display:none}
+#tab-content > div.active{display:block}
+</style>
+</head>
+<body>
+<div class="container">
+<header><h1>📤 WebShare P2P</h1></header>
+<div class="tabs">
+  <div class="tab active" onclick="openTab('seed',this)">🌱 Seed File</div>
+  <div class="tab" onclick="openTab('download',this)">⬇️ Download</div>
+  <div class="tab" onclick="openTab('list',this)">🌐 Magnet List</div>
+</div>
+<div id="tab-content">
+  <div id="seed" class="active">
+    <div class="card">
+      <h3>Pilih File untuk Dishare</h3>
+      <input type="file" id="fileInput">
+      <div class="info">⚠️ Jangan tutup halaman ini saat seeding</div>
+      <input type="text" id="magnet" placeholder="Magnet akan muncul di sini" readonly>
+      <button class="btn btn-primary" id="copyBtn" disabled onclick="copyMagnet()">📋 Salin Magnet</button>
+    </div>
+    <div class="card">
+      <div class="status-bar">Status: <span id="mode">Idle</span></div>
+      <div class="status-bar">Peer: <span id="peer">0</span></div>
+      <div id="info">Menunggu file...</div>
+    </div>
+  </div>
+  <div id="download">
+    <div class="card">
+      <h3>Download dari Magnet</h3>
+      <input type="text" id="magnetInput" placeholder="Tempel magnet atau hash di sini">
+      <button class="btn btn-warning" onclick="downloadTorrent()">⬇️ Mulai Download</button>
+      <button class="btn btn-success" id="saveBtn" disabled onclick="saveFiles()">💾 Save As</button>
+    </div>
+    <div class="card">
+      <div class="status-bar">Progress: <span id="progress">0%</span></div>
+      <div class="status-bar">Peer: <span id="peer2">0</span></div>
+      <div id="info2">Belum download</div>
+    </div>
+  </div>
+  <div id="list">
+    <div class="card">
+      <h3>Magnet Terbaru <button onclick="ambil()" style="float:right;padding:4px 10px;font-size:12px" class="btn btn-primary">🔄 Refresh</button></h3>
+      <div id="listMagnet">Loading...</div>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
+const client=new WebTorrent();
+let currentTorrent=null,downloadedFiles=[];
+
+function openTab(id,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('#tab-content > div').forEach(d=>d.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+
+function log(id,t){document.getElementById(id).textContent=t}
+function extractHash(v){let m=v.match(/btih:([a-f0-9]{40})/i);if(m)return m[1];if(/^[a-f0-9]{40}$/i.test(v))return v;return null;}
+function buildMagnet(h){let m='magnet:?xt=urn:btih:'+h;["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz"].forEach(tr=>m+="&tr="+encodeURIComponent(tr));return m;}
+
+// SEED
+fileInput.onchange=async()=>{
+ let f=fileInput.files[0]; if(!f)return;
+ if(currentTorrent)currentTorrent.destroy();
+ log('info',"🌱 Membuat torrent...");
+ client.seed(f,async t=>{
+   currentTorrent=t;
+   const mag = 'magnet:?xt=urn:btih:'+t.infoHash;
+   magnet.value = mag;
+   copyBtn.disabled=false;
+   mode.textContent="Seeding";
+   await shareMagnet(mag);
+   ambil();
+   log('info',"✅ Magnet siap. Salin & bagikan");
+   t.on("wire",()=>peer.textContent=t.numPeers);
+ });
+};
+
+function copyMagnet(){navigator.clipboard.writeText(magnet.value);copyBtn.textContent="✓ Disalin";setTimeout(()=>copyBtn.textContent="📋 Salin Magnet",2000);}
+
+// DOWNLOAD
+function downloadTorrent(){
+ let h=extractHash(magnetInput.value.trim()); if(!h){alert("Magnet tidak valid");return;}
+ if(currentTorrent)currentTorrent.destroy();
+ downloadedFiles=[];saveBtn.disabled=true;
+ log('info2',"⬇️ Mencari peer... tunggu 10-20 detik");
+ client.add(buildMagnet(h),t=>{
+   currentTorrent=t;
+   t.on("download",()=>{progress.textContent=Math.round(t.progress*100)+"%";});
+   t.on("wire",()=>{peer2.textContent=t.numPeers; log('info2',"✅ Ketemu peer!")});
+   t.on("done",()=>{downloadedFiles=t.files;saveBtn.disabled=false;mode.textContent="Done";log('info2',"✅ Download selesai")});
+ });
+}
+function saveFiles() {
+  if (!downloadedFiles.length) return log('info2',"⚠️ Belum ada file");
+  downloadedFiles.forEach(file=>{file.getBlob((err, blob) => {const url = URL.createObjectURL(blob);const a = document.createElement("a");a.href = url; a.download = file.name;document.body.appendChild(a); a.click(); a.remove();});});
+}
+
+// INI YANG DIBENERIN
+async function shareMagnet(mag){
+  try{
+    const res=await fetch(API+"?t="+Date.now());
+    const data=await res.json();
+    let kode = "";
+    if(Array.isArray(data) && data.length) kode = data[data.length-1].kode || data[data.length-1][0] || "";
+    else kode = data.kode || data[0] || "";
+
+    let arr=kode?kode.split(","):[];
+    arr=arr.filter(v=>v.trim()!=mag);
+    arr.unshift(mag); arr=arr.slice(0,10);
+    await fetch(API,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({kode:arr.join(",")})});
+  }catch(e){console.log(e)}
+}
+
+async function ambil(){
+  try{
+    listMagnet.innerHTML="Loading...";
+    const res=await fetch(API+"?t="+Date.now());
+    const data=await res.json();
+    console.log("Data dari GAS:", data) // buat debug
+
+    let kode = "";
+    if(Array.isArray(data) && data.length) kode = data[data.length-1].kode || data[data.length-1][0] || "";
+    else kode = data.kode || data[0] || "";
+
+    listMagnet.innerHTML="";
+    if(!kode){listMagnet.innerHTML="<div class=info>Belum ada magnet. Jadi seeder pertama</div>"; return;}
+
+    kode.split(",").reverse().forEach(m=>{ // reverse biar terbaru di atas
+      if(m.trim())
+      listMagnet.innerHTML+=`
+      <div class="magnet-item">
+        <div class="magnet-hash">${m}</div>
+        <button class="btn btn-primary" style="font-size:13px;padding:8px" onclick="useMagnet('${m}')">📋 Pakai Magnet Ini</button>
+      </div>`;
+    });
+  }catch(e){listMagnet.innerHTML="<div class=info>❌ Gagal load: "+e.message+"</div>"}
+}
+function useMagnet(m){magnetInput.value=m; document.querySelectorAll('.tab')[1].click(); log('info2',"📋 Magnet dipilih. Klik Mulai Download")}
+
+ambil();
+</script>
+</body>
+</html>
