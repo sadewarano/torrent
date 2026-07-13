@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebShare Seeder</title>
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#6366f1; --success:#22c55e; --bg:#f1f5f9; --card:#fff; --text:#1e293b;}
+*{box-sizing:border-box;font-family:'Poppins',system-ui}
+body{background:var(--bg);margin:0;padding:16px;color:var(--text)}
+.container{max-width:650px;margin:auto}
+header{text-align:center;margin-bottom:20px}
+header h1{margin:0;font-size:24px;color:var(--primary)}
+.card{background:var(--card);padding:16px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+input[type=file]{width:100%;padding:12px;border:2px dashed #cbd5e1;border-radius:8px;background:#f8fafc;cursor:pointer}
+input[type=text]{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin:8px 0;font-size:14px}
+.btn{width:100%;padding:12px;border:none;border-radius:8px;font-weight:600;font-size:15px;cursor:pointer;margin-top:8px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn:disabled{background:#94a3b8}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{padding:12px;background:#f8fafc;border-radius:8px;text-align:center}
+.stat-value{font-size:20px;font-weight:600;color:var(--primary)}
+.stat-label{font-size:12px;color:#64748b}
+.info{padding:12px;background:#eff6ff;border-left:4px solid var(--primary);border-radius:6px;font-size:14px;margin:10px 0}
+.peer-card{border:1px solid #e2e8f0;padding:12px;border-radius:10px;margin-bottom:10px}
+.peer-header{display:flex;justify-content:space-between;font-weight:600;font-size:14px}
+.peer-progress-bar{width:100%;height:8px;background:#e2e8f0;border-radius:10px;overflow:hidden;margin:6px 0}
+.peer-progress-fill{height:100%;background:var(--success);transition:.3s}
+.peer-stats{display:flex;justify-content:space-between;font-size:12px;color:#64748b}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <h1>🌱 WebShare Seeder</h1>
+  <p>Share file langsung dari browser kamu</p>
+</header>
+
+<div class="card">
+  <h3>1. Pilih File</h3>
+  <input type="file" id="fileInput">
+  <div class="info">⚠️ Jangan tutup halaman ini saat seeding</div>
+</div>
+
+<div id="seedPanel" style="display:none">
+  <div class="card">
+    <h3>2. Magnet Link</h3>
+    <input type="text" id="magnet" readonly>
+    <button class="btn btn-primary" id="copyBtn" onclick="copyMagnet()">📋 Salin Magnet</button>
+  </div>
+
+  <div class="card">
+    <h3>📊 Statistik Seeding</h3>
+    <div class="grid">
+      <div class="stat">
+        <div class="stat-value" id="fileSize">0 MB</div>
+        <div class="stat-label">Ukuran File</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="peerCount">0</div>
+        <div class="stat-label">Peer Aktif</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="uploaded">0 MB</div>
+        <div class="stat-label">Terupload</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="upSpeed">0 KB/s</div>
+        <div class="stat-label">Kecepatan</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>👥 Daftar Peer</h3>
+    <div id="peerList"><div class=info>Menunggu peer connect...</div></div>
+  </div>
+</div>
+
+<div id="info" class="info">Silakan pilih file untuk memulai</div>
+
+</div>
+<script>
+const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
+const client=new WebTorrent();
+let currentTorrent=null;
+let lastUploaded = 0;
+let lastTime = Date.now();
+
+const fileInput = document.getElementById('fileInput');
+const magnet = document.getElementById('magnet');
+const copyBtn = document.getElementById('copyBtn');
+const seedPanel = document.getElementById('seedPanel');
+
+function log(t){document.getElementById('info').textContent=t}
+function formatBytes(b){if(b===0)return '0 B'; const k=1024; const sizes=['B','KB','MB','GB']; const i=Math.floor(Math.log(b)/Math.log(k)); return parseFloat((b/Math.pow(k,i)).toFixed(2))+' '+sizes[i];}
+function buildMagnet(h){let m='magnet:?xt=urn:btih:'+h;["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz"].forEach(tr=>m+="&tr="+encodeURIComponent(tr));return m;}
+
+// SEED
+fileInput.onchange=async()=>{
+ let f=fileInput.files[0]; if(!f)return;
+ if(currentTorrent)currentTorrent.destroy();
+ lastUploaded = 0;
+ seedPanel.style.display = 'block';
+
+ log("🌱 Membuat torrent...");
+
+ client.seed(f,async t=>{
+   currentTorrent=t;
+   const mag = 'magnet:?xt=urn:btih:'+t.infoHash;
+   magnet.value = mag;
+   document.getElementById('fileSize').textContent = formatBytes(t.length);
+   await shareMagnet(mag);
+   log("✅ Magnet siap. Bagikan ke teman untuk mulai download");
+
+   // UPDATE STATS
+   t.on("upload",()=>{
+      document.getElementById('uploaded').textContent = formatBytes(t.uploaded);
+      const now = Date.now();
+      const diff = t.uploaded - lastUploaded;
+      const timeDiff = (now - lastTime) / 1000;
+      if(timeDiff > 0){
+        document.getElementById('upSpeed').textContent = formatBytes(diff/timeDiff)+'/s';
+        lastUploaded = t.uploaded;
+        lastTime = now;
+      }
+   });
+
+   // UPDATE PEER LIST TIAP 1 DETIK
+   setInterval(updatePeerList, 1000);
+ });
+};
+
+function updatePeerList(){
+  if(!currentTorrent) return;
+  const peerList = document.getElementById('peerList');
+  const wires = currentTorrent.wires; // ini cara benernya ambil peer
+
+  document.getElementById('peerCount').textContent = wires.length;
+
+  if(wires.length === 0){
+    peerList.innerHTML = '<div class=info>Menunggu peer connect...</div>';
+    return;
+  }
+
+  peerList.innerHTML = '';
+  wires.forEach((wire, i)=>{
+    // Progress peer = berapa % pieces yg dia punya
+    // Kalau dia downloader, progress akan naik dari 0 ke 100
+    const peerProgress = Math.round(wire.peerProgress * 100);
+    const downloaded = Math.round(wire.peerProgress * currentTorrent.length);
+
+    peerList.innerHTML += `
+      <div class="peer-card">
+        <div class="peer-header">
+          <span>Peer #${i+1}</span>
+          <span>${peerProgress}%</span>
+        </div>
+        <div class="peer-progress-bar"><div class="peer-progress-fill" style="width:${peerProgress}%"></div></div>
+        <div class="peer-stats">
+          <span>ID: ${wire.peerId? wire.peerId.toString('hex').slice(0,8) : 'wss'}</span>
+          <span>Didownload: ${formatBytes(downloaded)}</span>
+        </div>
+      </div>
+    `;
+  });
+}
+
+function copyMagnet(){
+  navigator.clipboard.writeText(magnet.value);
+  copyBtn.textContent="✓ Disalin";
+  setTimeout(()=>copyBtn.textContent="📋 Salin Magnet",2000);
+}
+
+// GAS
+async function shareMagnet(mag){
+  try{
+    const res=await fetch(API+"?t="+Date.now());
+    const data=await res.json();
+    let kode = Array.isArray(data) && data.length? data[data.length-1].kode || "" : data.kode || "";
+    let arr=kode?kode.split(","):[];
+    arr=arr.filter(v=>v.trim()!=mag);
+    arr.unshift(mag); arr=arr.slice(0,10);
+    await fetch(API,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({kode:arr.join(",")})});
+  }catch(e){}
+}
+</script>
+</body>
+</html>
