@@ -8,6 +8,7 @@ body{font-family:system-ui;padding:16px;max-width:600px;margin:auto;background:#
 input,button{width:100%;padding:12px;margin:8px 0;border-radius:8px;box-sizing:border-box}
 button{border:none;color:#fff;font-weight:600;cursor:pointer}
 .btn-copy{background:#2196F3}
+.btn-force{background:#f59e0b}
 button:disabled{background:#aaa;cursor:not-allowed}
 .card{background:#fff;padding:12px;border-radius:8px;margin:10px 0}
 .torrent{border-left:4px solid #ccc;padding:8px;margin:8px 0;background:#fafafa}
@@ -15,6 +16,8 @@ button:disabled{background:#aaa;cursor:not-allowed}
 .torrent.done{border-left:4px solid #4CAF50}
 .torrent.prog{font-size:0.85em;color:#555}
 .peer-detail{font-size:0.75em;color:#666;margin-top:4px}
+.row{display:flex;gap:8px}
+.row button{width:50%}
 .badge{font-size:0.7em;background:#6366f1;color:#fff;padding:2px 6px;border-radius:4px}
 </style></head><body>
 <h2>🌱 WebTorrent Auto Seeder P2P</h2>
@@ -23,7 +26,7 @@ button:disabled{background:#aaa;cursor:not-allowed}
 <button class="btn-copy" onclick="addManual()">➕ Tambah & Download/Seed</button>
 
 <div class="card" id="info">ℹ️ Menunggu magnet baru dari GAS...</div>
-<div class="card">Seeder Aktif: <span id="count">0</span>/5 | Mode: <span class="badge">RAREST</span></div>
+<div class="card">Torrent Aktif: <span id="count">0</span>/5 | Mode: <span class="badge">RAREST</span></div>
 
 <div class="card">
 <h3>🌐 Daftar Torrent Aktif Max 5</h3>
@@ -41,7 +44,7 @@ const TRACKERS = [
 ];
 const client=new WebTorrent();
 let seeders = {};
-let lastHashes = []; // fix: buat cek magnet baru
+let lastList = [];
 
 function log(t){document.getElementById('info').textContent=t}
 function extractHash(v){let m=v.match(/btih:([a-f0-9]{40})/i);if(m)return m[1].toLowerCase();if(/^[a-f0-9]{40}$/i.test(v))return v.toLowerCase();return null;}
@@ -54,9 +57,9 @@ function addManual(){
   addTorrent(h, "Manual");
 }
 
-/* FUNGSI UTAMA: TAMBAH TORRENT SEBAGAI SEEDER/DOWNLOADER */
+/* FUNGSI UTAMA: TAMBAH TORRENT */
 function addTorrent(hash, sumber="GAS"){
-  if(seeders){
+  if(seeders[hash]){
     log("ℹ️ "+hash.substring(0,8)+"... sudah aktif");
     return;
   }
@@ -68,35 +71,55 @@ function addTorrent(hash, sumber="GAS"){
     log("🗑️ Hapus torrent lama: "+firstHash.substring(0,8)+"...");
   }
 
-  // KUNCI: strategy rarest + announce 4 tracker
+  // FIX 1: HAPUS path '/tmp'
+  // FIX 2: TAMBAH strategy rarest + announce
   client.add(buildMagnet(hash), {
-    strategy: 'rarest', // <--- Biar tiap peer ambil piece yg paling langka
-    maxConns: 55, // <--- Boleh konek ke banyak peer
-    announce: TRACKERS
+    strategy: 'rarest',
+    announce: TRACKERS,
+    maxConns: 55
   }, t=>{
-    seeders = t;
+    seeders[hash] = t;
     updateUI();
-    log(`⬇️ ${sumber} Join swarm Rarest: ${hash.substring(0,8)}...`);
+    log(`⬇️ ${sumber} Join swarm: ${hash.substring(0,8)}...`);
 
     t.on("download", ()=> updateUI());
     t.on("upload", ()=> updateUI());
-    t.on("wire", ()=> updateUI()); // ada peer baru masuk
+    t.on("wire", ()=> updateUI());
+    t.on("metadata", ()=> updateUI());
 
     t.on("done", ()=>{
-      log(`✅ ${hash.substring(0,8)}... Selesai 100%. Sekarang jadi Seeder penuh`);
+      log(`✅ ${hash.substring(0,8)}... 100%. Mode Seeder`);
       updateUI();
     });
-
-    t.on("error", e => log("❌ Error: " + e.message));
+    t.on("error", e => {
+      log("❌ Error: " + e.message);
+      console.error(e);
+    });
   });
 }
 
-/* UPDATE UI DAFTAR SEEDER */
+/* FORCE ANNOUNCE */
+function forceAnnounce(hash){
+  let t = seeders[hash];
+  if(!t) return;
+  log("🔄 Force announce ke tracker...");
+  t.discover(); // tembak DHT + Tracker
+  setTimeout(()=>log("✅ Force selesai. Tunggu 5-10 detik"), 1000);
+}
+
+/* UPDATE UI */
 function updateUI(){
   document.getElementById('count').textContent = Object.keys(seeders).length;
-  document.getElementById('listSeeder').innerHTML = "";
+  let listEl = document.getElementById('listSeeder');
+  listEl.innerHTML = "";
+
+  if(Object.keys(seeders).length === 0){
+    listEl.innerHTML = "Belum ada torrent";
+    return;
+  }
+
   Object.keys(seeders).forEach(hash=>{
-    let t = seeders;
+    let t = seeders[hash];
     let div = document.createElement("div");
     let status = t.progress < 1? "Downloading" : "Seeding";
     div.className = "torrent " + (t.progress < 1? "active" : "done");
@@ -105,30 +128,33 @@ function updateUI(){
     let peers = t.numPeers;
     let up = formatBytes(t.uploaded);
     let down = formatBytes(t.downloaded);
+    let name = t.name || hash.substring(0,16)+"...";
 
-    // List peer detail biar keliatan B C D saling connect
     let peerHtml = "";
     t.wires.forEach((wire, i)=>{
       let pProg = Math.round(wire.peerProgress * 100);
-      peerHtml += `<div class="peer-detail">Peer ${i+1}: ${pProg}% - Up:${formatBytes(wire.uploaded)} Down:${formatBytes(wire.downloaded)}</div>`;
+      peerHtml += `<div class="peer-detail">Peer ${i+1}: ${pProg}% - ↑${formatBytes(wire.uploaded)} ↓${formatBytes(wire.downloaded)}</div>`;
     })
 
     div.innerHTML = `
-      <b>${hash.substring(0,16)}...</b> <span class="badge">RAREST</span><br>
+      <b>${name}</b><br>
       <div class="prog">Status: ${status} | ${prog}% | Peer: ${peers} | ↑${up} ↓${down}</div>
       ${peerHtml}
-      <button onclick="copy('${hash}')" style="width:auto;padding:4px 8px;font-size:0.8em;background:#2196F3;color:#fff;border:none;border-radius:4px;margin-top:4px">📋 Copy Magnet</button>
-      <button onclick="remove('${hash}')" style="width:auto;padding:4px 8px;font-size:0.8em;background:#f44336;color:#fff;border:none;border-radius:4px;margin-top:4px">❌ Stop</button>
+      <div class="row">
+        <button onclick="forceAnnounce('${hash}')" class="btn-force">⚡ Force Announce</button>
+        <button onclick="copy('${hash}')" class="btn-copy">📋 Copy</button>
+      </div>
+      <button onclick="remove('${hash}')" style="background:#f44336">❌ Stop</button>
     `;
-    document.getElementById('listSeeder').appendChild(div);
+    listEl.appendChild(div);
   });
 }
 
 function formatBytes(b){if(b===0)return '0B';const k=1024;const sizes=['B','KB','MB','GB'];const i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+sizes[i];}
 function copy(hash){navigator.clipboard.writeText(buildMagnet(hash));log("📋 Disalin");}
-function remove(hash){if(seeders){seeders.destroy();delete seeders;updateUI();log("❌ Torrent di-stop");}}
+function remove(hash){if(seeders[hash]){seeders[hash].destroy();delete seeders[hash];updateUI();log("❌ Torrent di-stop");}}
 
-/* CEK GAS TIAP 3 DETIK - FIX */
+/* CEK GAS TIAP 3 DETIK */
 async function cekGAS(){
   try{
     const res=await fetch(API+"?t="+Date.now());
@@ -139,17 +165,17 @@ async function cekGAS(){
     if(!kode) return;
 
     let arr = kode.split(",").filter(Boolean).map(extractHash).filter(Boolean);
-    arr = [...new Set(arr)]; // hapus duplikat
+    arr = [...new Set(arr)];
 
-    // FIX: cek per hash, bukan array full
-    let newHashes = arr.filter(h =>!seeders);
-
-    if(newHashes.length > 0){
-      log(`🆕 Ada ${newHashes.length} magnet baru dari GAS. Auto join swarm...`);
-      newHashes.forEach(hash=> addTorrent(hash, "GAS"));
+    let isNew = JSON.stringify(arr.sort())!== JSON.stringify(lastList.sort());
+    if(isNew){
+      log("🆕 Ada magnet baru dari GAS. Auto join swarm...");
+      arr.forEach(hash=>{
+        if(!seeders[hash]) addTorrent(hash, "GAS");
+      });
+      lastList = arr;
     }
-    lastHashes = arr;
-  }catch(e){console.error(e)}
+  }catch(e){log("❌ GAS Error: "+e.message)}
 }
 
 cekGAS();
