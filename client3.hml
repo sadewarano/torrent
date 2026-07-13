@@ -218,7 +218,7 @@ async function shareMagnet(mag){
     await fetch(API,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({kode:arr.join(",")})});
   }catch(e){}
 }
-
+//
 // Stop auto force saat close tab
 window.onbeforeunload = () => clearInterval(autoForceInterval);
 </script>
