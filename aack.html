@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manajemen Titip Warung</title>
+
+<style>
+body { font-family: Arial; background:#f4f6f8; padding:15px; }
+.container { max-width:1100px; margin:auto; background:#fff; padding:15px; border-radius:10px; }
+
+.tab { display:flex; flex-wrap:wrap; margin-bottom:10px; }
+.tab button { flex:1; padding:10px; border:none; background:#ddd; cursor:pointer; }
+.tab button.active { background:#007bff; color:#fff; }
+
+input, select { padding:8px; margin:5px 0; width:100%; }
+
+button { border-radius:5px; cursor:pointer; margin-top:5px; }
+.tambah { background:#28a745; color:#fff; }
+.hapus { background:red; color:#fff; }
+.edit { background:orange; color:#fff; }
+.btn-backup { background:#6c757d; color:#fff; }
+.btn-restore { background:#17a2b8; color:#fff; }
+
+.card { background:#f1f3f5; padding:10px; margin:5px 0; border-radius:8px; }
+.toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="tab">
+  <button class="active" onclick="switchTab('dashboard',this)">Dashboard</button>
+  <button onclick="switchTab('warung',this)">Warung</button>
+  <button onclick="switchTab('produk',this)">Produk</button>
+  <button onclick="switchTab('transaksi',this)">Transaksi</button>
+  <button onclick="switchTab('reminder',this)">Reminder</button>
+  <button onclick="switchTab('detail',this)">Detail Warung</button>
+  <button onclick="switchTab('rekap',this)">Rekap Harian</button>
+</div>
+
+<!-- TOOLBAR BACKUP RESTORE -->
+<div class="toolbar">
+  <button class="btn-backup" onclick="backupData()">⬇️ Backup Data</button>
+  <button class="btn-restore" onclick="document.getElementById('fileRestore').click()">⬆️ Restore Data</button>
+  <input type="file" id="fileRestore" accept=".json" style="display:none" onchange="restoreData(event)">
+</div>
+
+<!-- DASHBOARD -->
+<div id="tab-dashboard">
+  <h3>Dashboard</h3>
+  <div id="dashboard"></div>
+</div>
+
+<!-- WARUNG -->
+<div id="tab-warung" style="display:none">
+  <h3>Warung</h3>
+  <input id="namaWarung" placeholder="Nama Warung">
+  <button class="tambah" onclick="tambahWarung()">+ Tambah</button>
+  <div id="listWarung"></div>
+</div>
+
+<!-- PRODUK -->
+<!-- PRODUK -->
+<div id="tab-produk" style="display:none">
+  <h3>Produk</h3>
+
+  <!-- Sub Tab -->
+  <div class="tab" style="margin-bottom:15px">
+    <button id="subtab-jual" class="active" onclick="switchSubTabProduk('jual',this)">Harga Jual</button>
+    <button id="subtab-modal" onclick="switchSubTabProduk('modal',this)">Harga Modal</button>
+  </div>
+
+  <!-- Sub Tab 1: Harga Jual -->
+  <div id="subtab-produk-jual">
+    <input id="namaProduk" placeholder="Nama Produk">
+    <input id="hargaProduk" type="number" placeholder="Harga Jual / Harga Nitip">
+    <input type="hidden" id="editIndexProduk">
+    <button class="tambah" onclick="simpanProduk()" id="btnSimpanProduk">+ Tambah</button>
+    <button style="display:none;background:#6c757d;color:#fff" onclick="batalEditProduk()" id="btnBatalEditProduk">Batal</button>
+    <div id="listProduk"></div>
+  </div>
+
+  <!-- Sub Tab 2: Harga Modal -->
+  <div id="subtab-produk-modal" style="display:none">
+    <select id="produkModalSelect"></select>
+    <input id="hargaModal" type="number" placeholder="Harga Modal / Bahan Baku">
+    <button class="tambah" onclick="simpanHargaModal()">+ Simpan Modal</button>
+    <div id="listModal"></div>
+  </div>
+</div>
+
+
+<!-- TRANSAKSI -->
+<div id="tab-transaksi" style="display:none">
+  <h3>Transaksi</h3>
+  <input type="date" id="tanggal">
+  <select id="warungSelect"></select>
+  <select id="produkSelect"></select>
+
+  <select id="tipe">
+    <option value="titip">Titip</option>
+    <option value="ambil">Ambil</option>
+    <option value="jual">Terjual</option>
+  </select>
+
+  <input id="jumlah" type="number" placeholder="Jumlah">
+  <button class="tambah" onclick="tambahTransaksi()">+ Simpan</button>
+
+  <div id="listTransaksi"></div>
+</div>
+
+<!-- REMINDER -->
+<div id="tab-reminder" style="display:none">
+  <h3>Reminder</h3>
+  <div id="reminder"></div>
+</div>
+
+<!-- DETAIL -->
+<div id="tab-detail" style="display:none">
+  <h3>Detail Warung</h3>
+  <select id="detailSelect" onchange="renderDetail()"></select>
+  <div id="detail"></div>
+</div>
+
+<!-- REKAP HARIAN -->
+<div id="tab-rekap" style="display:none">
+  <h3>Rekap Harian</h3>
+  <input type="date" id="tanggalRekap" onchange="renderRekap()">
+  <div id="rekapHarian"></div>
+</div>
+
+</div>
+
+<script>
+// ===== DATA =====
+let warung = JSON.parse(localStorage.getItem("warung")) || [];
+let produk = JSON.parse(localStorage.getItem("produk")) || [];
+let trx = JSON.parse(localStorage.getItem("trx")) || [];
+
+function save(){
+  localStorage.setItem("warung",JSON.stringify(warung));
+  localStorage.setItem("produk",JSON.stringify(produk));
+  localStorage.setItem("trx",JSON.stringify(trx));
+}
+
+// ===== BACKUP RESTORE =====
+function backupData(){
+  const data = {
+    warung: warung,
+    produk: produk,
+    trx: trx,
+    version: 1,
+    backup_date: new Date().toISOString()
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const tanggal = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `backup-titip-warung-${tanggal}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function restoreData(event){
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if(!confirm("Restore akan menimpa semua data yang ada. Lanjutkan?")) {
+    event.target.value = "";
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if(data.warung && data.produk && data.trx){
+        warung = data.warung;
+        produk = data.produk;
+        trx = data.trx;
+        save();
+
+        // Refresh semua tampilan
+        renderWarung();
+        renderProduk();
+        renderTransaksi();
+        renderDashboard();
+        renderReminder();
+        updateSelect();
+        renderDetail();
+
+        alert("Restore berhasil!");
+      } else {
+        alert("File backup tidak valid!");
+      }
+    } catch(err) {
+      alert("Gagal restore: " + err.message);
+    }
+    event.target.value = ""; // reset input file
+  };
+  reader.readAsText(file);
+}
+
+// ===== TAB =====
+function switchTab(tab,el){
+  document.querySelectorAll('[id^="tab-"]').forEach(x=>x.style.display="none");
+  document.querySelectorAll('.tab button').forEach(b=>b.classList.remove("active"));
+  document.getElementById("tab-"+tab).style.display="block";
+  el.classList.add("active");
+}
+
+// ===== WARUNG =====
+// ===== WARUNG =====
+function tambahWarung(){
+  let nama = document.getElementById("namaWarung").value.trim();
+  if(!nama) return alert("Nama warung wajib diisi");
+  warung.push({nama});
+  save(); renderWarung(); updateSelect();
+  document.getElementById("namaWarung").value="";
+}
+
+function renderWarung(){
+  let html="";
+  warung.forEach((w,i)=>{
+    html+=`<div class="card">
+      <b>${i+1}.</b> ${w.nama}
+      <div style="margin-top:8px">
+        <button class="edit" onclick="editWarung(${i})">Edit</button>
+        <button class="hapus" onclick="hapusWarung(${i})">Hapus</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById("listWarung").innerHTML=html || "<i>Belum ada warung</i>";
+}
+
+function editWarung(i){
+  let namaLama = warung[i].nama;
+  let namaBaru = prompt("Edit nama warung:", namaLama);
+
+  if(namaBaru === null) return; // cancel
+  namaBaru = namaBaru.trim();
+  if(!namaBaru) return alert("Nama tidak boleh kosong");
+  if(namaBaru === namaLama) return;
+
+  // Update nama di data warung
+  warung[i].nama = namaBaru;
+
+  // Update juga nama di semua transaksi biar konsisten
+  trx.forEach(t=>{
+    if(t.warung === namaLama) t.warung = namaBaru;
+  });
+
+  save();
+  renderWarung();
+  updateSelect();
+  renderTransaksi();
+  renderDashboard();
+  renderReminder();
+  renderDetail();
+}
+
+function hapusWarung(i){
+  if(confirm("Hapus warung ini? Data transaksi tetap ada.")){
+    warung.splice(i,1);
+    save();
+    renderWarung();
+    updateSelect();
+    renderDashboard();
+    renderReminder();
+  }
+}
+
+// ===== PRODUK =====
+// ===== PRODUK =====
+// Struktur data produk jadi: {nama, harga, hargaModal}
+function switchSubTabProduk(tab, el){
+  document.getElementById('subtab-produk-jual').style.display = 'none';
+  document.getElementById('subtab-produk-modal').style.display = 'none';
+  document.getElementById('subtab-jual').classList.remove('active');
+  document.getElementById('subtab-modal').classList.remove('active');
+
+  document.getElementById('subtab-produk-'+tab).style.display = 'block';
+  el.classList.add('active');
+
+  if(tab === 'modal') renderModal();
+}
+
+function simpanProduk(){
+  let nama = document.getElementById("namaProduk").value.trim();
+  let harga = Number(document.getElementById("hargaProduk").value);
+  let editIndex = document.getElementById("editIndexProduk").value;
+
+  if(!nama ||!harga) return alert("Nama dan Harga Jual wajib diisi");
+
+  if(editIndex === ""){ // Mode Tambah
+    if(produk.find(p => p.nama.toLowerCase() === nama.toLowerCase()))
+      return alert("Nama produk sudah ada");
+    produk.push({nama, harga, hargaModal: 0});
+  } else { // Mode Edit
+    produk[editIndex].nama = nama;
+    produk[editIndex].harga = harga;
+    batalEditProduk();
+  }
+
+  save();
+  renderProduk();
+  updateSelect();
+  document.getElementById("namaProduk").value = "";
+  document.getElementById("hargaProduk").value = "";
+}
+
+function editProduk(i){
+  document.getElementById("namaProduk").value = produk[i].nama;
+  document.getElementById("hargaProduk").value = produk[i].harga;
+  document.getElementById("editIndexProduk").value = i;
+  document.getElementById("btnSimpanProduk").innerText = "Update";
+  document.getElementById("btnBatalEditProduk").style.display = "inline-block";
+  document.getElementById("namaProduk").focus();
+}
+
+function batalEditProduk(){
+  document.getElementById("namaProduk").value = "";
+  document.getElementById("hargaProduk").value = "";
+  document.getElementById("editIndexProduk").value = "";
+  document.getElementById("btnSimpanProduk").innerText = "+ Tambah";
+  document.getElementById("btnBatalEditProduk").style.display = "none";
+}
+
+function renderProduk(){
+  let html = "";
+  produk.forEach((p,i)=>{
+    let laba = p.harga - (p.hargaModal || 0);
+    html+=`<div class="card">
+      <b>${p.nama}</b><br>
+      Jual: Rp${p.harga.toLocaleString()} | Modal: Rp${(p.hargaModal||0).toLocaleString()}
+      <span style="color:#28a745">| Laba: Rp${laba.toLocaleString()}</span>
+      <div style="margin-top:8px">
+        <button class="edit" onclick="editProduk(${i})">Edit</button>
+        <button class="hapus" onclick="hapusProduk(${i})">Hapus</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById("listProduk").innerHTML = html || "<i>Belum ada produk</i>";
+  updateSelectModal();
+}
+
+function hapusProduk(i){
+  if(confirm(`Hapus produk ${produk[i].nama}?`)){
+    produk.splice(i,1);
+    save();
+    renderProduk();
+    updateSelect();
+    renderDashboard();
+  }
+}
+
+// ===== HARGA MODAL =====
+function updateSelectModal(){
+  let p = document.getElementById("produkModalSelect");
+  p.innerHTML = "";
+  produk.forEach((x,i)=>{
+    p.innerHTML += `<option value="${i}">${x.nama}</option>`;
+  });
+}
+
+function simpanHargaModal(){
+  let idx = document.getElementById("produkModalSelect").value;
+  let hargaModal = Number(document.getElementById("hargaModal").value);
+  if(idx === "" ||!hargaModal) return alert("Pilih produk & isi harga modal");
+
+  produk[idx].hargaModal = hargaModal;
+  save();
+  renderModal();
+  renderProduk(); // refresh biar laba ke-update
+  document.getElementById("hargaModal").value = "";
+}
+
+function renderModal(){
+  let html = "";
+  produk.forEach((p,i)=>{
+    html+=`<div class="card">
+      <b>${p.nama}</b>: Rp${(p.hargaModal||0).toLocaleString()}
+      <button class="hapus" onclick="hapusModal(${i})" style="float:right">Reset</button>
+    </div>`;
+  });
+  document.getElementById("listModal").innerHTML = html || "<i>Belum ada data modal</i>";
+}
+
+function hapusModal(i){
+  if(confirm(`Reset harga modal ${produk[i].nama} jadi 0?`)){
+    produk[i].hargaModal = 0;
+    save();
+    renderModal();
+    renderProduk();
+  }
+}
+
+
+
+// ===== SELECT =====
+function updateSelect(){
+  let w=document.getElementById("warungSelect");
+  let p=document.getElementById("produkSelect");
+  let d=document.getElementById("detailSelect");
+
+  w.innerHTML=""; p.innerHTML=""; d.innerHTML="";
+
+  warung.forEach((x,i)=>{
+    w.innerHTML+=`<option value="${i}">${x.nama}</option>`;
+    d.innerHTML+=`<option value="${i}">${x.nama}</option>`;
+  });
+
+  produk.forEach((x,i)=>{
+    p.innerHTML+=`<option value="${i}">${x.nama}</option>`;
+  });
+
+  updateSelectModal(); // tambah ini
+}
+
+// ===== TRANSAKSI =====
+// ===== TRANSAKSI =====
+function tambahTransaksi(){
+  let tanggal=document.getElementById("tanggal").value;
+  let w=warung[warungSelect.value]?.nama;
+  let p=produk[produkSelect.value]?.nama;
+  let tipe=document.getElementById("tipe").value;
+  let jumlah=Number(document.getElementById("jumlah").value||0);
+
+  if(!tanggal||!w||!p||!jumlah) return alert("Lengkapi data transaksi");
+
+  trx.push({
+    id: Date.now() + Math.random(), // id unik + random biar nggak bentrok
+    tanggal,warung:w,produk:p,tipe,jumlah
+  });
+  save();
+
+  renderTransaksi(); renderDashboard(); renderReminder(); renderDetail();
+  document.getElementById("jumlah").value="";
+}
+
+function renderTransaksi(){
+  let html="";
+  [...trx].reverse().forEach((t,idx)=>{
+    html+=`<div class="card">
+      <b>${trx.length - idx}.</b> ${t.tanggal} | ${t.warung} | ${t.produk} | ${t.tipe} ${t.jumlah}
+      <div style="margin-top:8px">
+        <button class="edit" onclick="editTransaksi(${t.id})">Edit</button>
+        <button class="hapus" onclick="hapusTransaksi(${t.id})">Hapus</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById("listTransaksi").innerHTML=html || "<i>Belum ada transaksi</i>";
+}
+
+function editTransaksi(id){
+  let t = trx.find(x => x.id === id);
+  if(!t) return alert("Data tidak ditemukan");
+
+  let tanggalBaru = prompt("Edit tanggal:", t.tanggal);
+  if(tanggalBaru === null) return;
+  if(!tanggalBaru) return alert("Tanggal wajib diisi");
+
+  let jumlahBaru = prompt(`Edit jumlah ${t.tipe}:`, t.jumlah);
+  if(jumlahBaru === null) return;
+  jumlahBaru = Number(jumlahBaru);
+  if(!jumlahBaru) return alert("Jumlah wajib diisi");
+
+  let tipeBaru = prompt("Edit tipe (titip/ambil/jual):", t.tipe);
+  if(tipeBaru === null) return;
+  if(!["titip","ambil","jual"].includes(tipeBaru)) return alert("Tipe harus titip/ambil/jual");
+
+  t.tanggal = tanggalBaru;
+  t.jumlah = jumlahBaru;
+  t.tipe = tipeBaru;
+
+  save();
+  renderTransaksi();
+  renderDashboard();
+  renderReminder();
+  renderDetail();
+}
+
+function hapusTransaksi(id){
+  if(confirm("Hapus transaksi ini?")){
+    trx = trx.filter(x => x.id!== id);
+    save();
+    renderTransaksi();
+    renderDashboard();
+    renderReminder();
+    renderDetail();
+  }
+}
+
+// ===== REKAP HARIAN =====
+function renderRekap(){
+    let tgl = document.getElementById("tanggalRekap").value;
+    if(!tgl) return;
+    
+    // Filter transaksi tanggal yg dipilih
+    let trxHari = trx.filter(t => t.tanggal === tgl);
+    if(trxHari.length === 0){
+        document.getElementById("rekapHarian").innerHTML = "<div class='card'><i>Belum ada transaksi di tanggal ini</i></div>";
+        return;
+    }
+    
+    // Kelompokkan per produk + per tipe
+    let rekap = {};
+    produk.forEach(p => {
+        rekap[p.nama] = { 
+            titip: 0, 
+            ambil: 0, 
+            jual: 0, 
+            harga: p.harga, 
+            modal: p.hargaModal || 0, 
+            labaSatuan: p.harga - (p.hargaModal || 0) 
+        };
+    });
+    
+    // Kelompokkan per warung + produk
+    let detailWarung = {};
+    warung.forEach(w => {
+        detailWarung[w.nama] = {};
+        produk.forEach(p => {
+            detailWarung[w.nama][p.nama] = { titip: 0, ambil: 0, jual: 0 };
+        });
+    });
+    
+    trxHari.forEach(t => {
+        if(rekap[t.produk]) rekap[t.produk][t.tipe] += t.jumlah;
+        if(detailWarung[t.warung] && detailWarung[t.warung][t.produk]){
+            detailWarung[t.warung][t.produk][t.tipe] += t.jumlah;
+        }
+    });
+    
+    // Render 3 section
+    let totalJual = 0, totalTitip = 0, totalAmbil = 0;
+    let totalLaba = 0, totalOmzet = 0;
+    let htmlTitip = "<h4>📦 Produk Nitip</h4>";
+    let htmlAmbil = "<h4>🔄 Produk Ambil Masuk Gudang</h4>";
+    let htmlJual = "<h4>💰 Produk Terjual</h4>";
+    
+    for(let nama in rekap){
+        let d = rekap[nama];
+        if(d.titip > 0){
+            totalTitip += d.titip;
+            htmlTitip += `<div class="card">
+                <b>${nama}</b>: ${d.titip} pcs 
+                <span style="float:right">Rp${(d.titip * d.harga).toLocaleString()}</span>
+            </div>`;
+        }
+        if(d.ambil > 0){
+            totalAmbil += d.ambil;
+            htmlAmbil += `<div class="card">
+                <b>${nama}</b>: ${d.ambil} pcs 
+                <span style="float:right">Rp${(d.ambil * d.modal).toLocaleString()} modal</span>
+            </div>`;
+        }
+        if(d.jual > 0){
+            totalJual += d.jual;
+            let omzet = d.jual * d.harga;
+            let laba = d.jual * d.labaSatuan;
+            totalOmzet += omzet;
+            totalLaba += laba;
+            htmlJual += `<div class="card">
+                <b>${nama}</b>: ${d.jual} pcs<br>
+                Omzet: Rp${omzet.toLocaleString()} | 
+                <span style="color:#28a745">Laba: Rp${laba.toLocaleString()}</span><br>
+                <small>Laba/pcs: Rp${d.labaSatuan.toLocaleString()}</small>
+            </div>`;
+        }
+    }
+    
+    // Detail per warung
+    let htmlWarung = "<h4 style='margin-top:20px'>📍 Rincian Per Warung</h4>";
+    for(let warungName in detailWarung){
+        let w = detailWarung[warungName];
+        let adaTransaksi = false;
+        
+        htmlWarung += `<div class="card" style="background:#e3f2fd"><b>${warungName}</b></div>`;
+        
+        for(let produkName in w){
+            let p = w[produkName];
+            if(p.titip > 0 || p.ambil > 0 || p.jual > 0){
+                adaTransaksi = true;
+                htmlWarung += `<div class="card" style="margin-left:15px">
+                    <b>${produkName}</b><br>
+                    Titip: ${p.titip} | Ambil: ${p.ambil} | Jual: ${p.jual}
+                </div>`;
+            }
+        }
+        
+        if(!adaTransaksi){
+            htmlWarung += `<div class="card" style="margin-left:15px"><i>Belum ada transaksi</i></div>`;
+        }
+    }
+    
+    // Ringkasan atas
+    let ringkasan = `<div class="card" style="background:#d1ecf1">
+        <b>📅 ${new Date(tgl).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</b><br>
+        Nitip: ${totalTitip} pcs | Ambil: ${totalAmbil} pcs | Terjual: ${totalJual} pcs<br>
+        <b style="color:#007bff">Total Omzet: Rp${totalOmzet.toLocaleString()}</b><br>
+        <b style="color:#28a745">Total Laba: Rp${totalLaba.toLocaleString()}</b>
+    </div>`;
+    
+    document.getElementById("rekapHarian").innerHTML = ringkasan + htmlJual + htmlTitip + htmlAmbil + htmlWarung;
+}
+
+// ===== INIT =====
+// Kasih ID ke transaksi lama yg belum punya id
+let perluSave = false;
+trx.forEach(t => {
+  if(!t.id){
+    t.id = Date.now() + Math.random();
+    perluSave = true;
+  }
+});
+if(perluSave) save();
+
+document.getElementById("tanggal").value=new Date().toISOString().split("T")[0];
+
+renderWarung();
+renderProduk();
+renderTransaksi();
+renderDashboard();
+renderReminder();
+updateSelect();
+renderDetail();
+
+document.getElementById("tanggalRekap").value = new Date().toISOString().split("T")[0];
+renderRekap();
+
+// ===== DASHBOARD =====
+function renderDashboard(){
+  let totalWarung = warung.length;
+  let totalNilaiStok = 0;
+  let totalNilaiModal = 0; // <-- Tambah ini
+  let totalLabaPotensi = 0;
+
+  let perProduk = {};
+  produk.forEach(p=>{
+    perProduk[p.nama] = {
+      titip:0, 
+      ambil:0, 
+      jual:0, 
+      harga:p.harga, 
+      modal:p.hargaModal || 0
+    };
+  });
+
+  trx.forEach(t=>{
+    if(perProduk[t.produk]){
+      perProduk[t.produk][t.tipe] += t.jumlah;
+    }
+  });
+
+  let html=`<div class="card"><b>Total Warung: ${totalWarung}</b></div>`;
+
+  for(let k in perProduk){
+    let d = perProduk[k];
+    let stokReal = d.titip - d.ambil - d.jual;
+    if(stokReal < 0) stokReal = 0;
+
+    let nilaiStok = stokReal * d.harga;
+    let nilaiModalStok = stokReal * d.modal; // <-- Tambah ini
+    let labaPerPcs = d.harga - d.modal;
+    let potensiLabaStok = stokReal * labaPerPcs;
+    let labaSudahTerjual = d.jual * labaPerPcs;
+    
+    totalNilaiStok += nilaiStok;
+    totalNilaiModal += nilaiModalStok; // <-- Tambah ini
+    totalLabaPotensi += potensiLabaStok;
+    
+    html+=`<div class="card">
+      <b>${k}</b><br>
+      Stok: ${stokReal} pcs | Nilai Jual: Rp${nilaiStok.toLocaleString()}<br>
+      <span style="color:#dc3545">Nilai Modal: Rp${nilaiModalStok.toLocaleString()}</span><br>
+      <span style="color:#28a745">Laba/pcs: Rp${labaPerPcs.toLocaleString()}</span> | 
+      <span style="color:#007bff">Potensi Laba: Rp${potensiLabaStok.toLocaleString()}</span><br>
+      <small>Terjual: ${d.jual} | Laba Realisasi: Rp${labaSudahTerjual.toLocaleString()}</small>
+    </div>`;
+  }
+
+  // Ringkasan di atas
+  let ringkasan = `<div class="card" style="background:#d4edda">
+    <b>Total Nilai Stok Jual: Rp${totalNilaiStok.toLocaleString()}</b><br>
+    <b style="color:#dc3545">Total Nilai Modal: Rp${totalNilaiModal.toLocaleString()}</b><br>
+    <b style="color:#155724">Total Potensi Laba: Rp${totalLabaPotensi.toLocaleString()}</b>
+  </div>`;
+
+  document.getElementById("dashboard").innerHTML = ringkasan + html;
+}
+
+// ===== REMINDER =====
+function renderReminder(){
+  let list=[];
+
+  warung.forEach(w=>{
+    let last=null;
+
+    trx.forEach(t=>{
+      if(t.warung===w.nama){
+        let d=new Date(t.tanggal);
+        if(!last||d>last) last=d;
+      }
+    });
+
+    let hari=999;
+    if(last){
+      hari=Math.floor((new Date()-last)/(1000*60*60*24));
+    }
+
+    if(hari>4){
+      list.push({nama:w.nama,hari});
+    }
+  });
+
+  list.sort((a,b)=>b.hari-a.hari);
+
+  let html="";
+  list.forEach(x=>{
+    html+=`<div class="card">${x.nama} - ${x.hari} hari</div>`;
+  });
+
+  document.getElementById("reminder").innerHTML=html || "Aman";
+}
+
+// ===== DETAIL =====
+// ===== DETAIL =====
+function renderDetail(){
+  let idx=document.getElementById("detailSelect").value;
+  let nama=warung[idx]?.nama;
+  if(!nama){
+    document.getElementById("detail").innerHTML = "<i>Pilih warung dulu</i>";
+    return;
+  }
+
+  // 1. Filter transaksi warung ini aja
+  let trxWarung = trx.filter(t=>t.warung===nama);
+
+  // 2. Hitung stok per produk
+  let stokProduk={};
+  produk.forEach(p=>{
+    stokProduk[p.nama] = {titip:0, ambil:0, jual:0, harga:p.harga};
+  });
+
+  trxWarung.forEach(t=>{
+    if(stokProduk[t.produk]){
+      stokProduk[t.produk][t.tipe] += t.jumlah;
+    }
+  });
+
+  // 3. Tampilkan header + stok terakhir
+  let html=`<div class="card"><b>📍 ${nama}</b></div>`;
+
+  html += `<h4>📦 Stok Nitip Terakhir</h4>`;
+  for(let k in stokProduk){
+    let d = stokProduk[k];
+    let stok = d.titip - d.ambil - d.jual;
+    if(stok < 0) stok = 0;
+    let nilaiStok = stok * d.harga;
+
+    html+=`<div class="card">
+      <b>${k}</b>: ${stok} pcs
+      <span style="float:right">Rp${nilaiStok.toLocaleString()}</span><br>
+      <small>Titip ${d.titip} | Ambil ${d.ambil} | Jual ${d.jual}</small>
+    </div>`;
+  }
+
+  // 4. Riwayat transaksi per tanggal, dikelompokkan
+  html += `<h4 style="margin-top:20px">📋 Riwayat Transaksi</h4>`;
+
+  // Urutkan dari terbaru
+  let trxSort = [...trxWarung].sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
+
+  if(trxSort.length === 0){
+    html += `<div class="card"><i>Belum ada transaksi</i></div>`;
+  } else {
+    // Kelompokkan by tanggal
+    let groupTanggal = {};
+    trxSort.forEach(t=>{
+      if(!groupTanggal[t.tanggal]) groupTanggal[t.tanggal] = [];
+      groupTanggal[t.tanggal].push(t);
+    });
+
+    for(let tgl in groupTanggal){
+      let tglFormat = new Date(tgl).toLocaleDateString('id-ID', {
+        weekday:'long', year:'numeric', month:'long', day:'numeric'
+      });
+
+      html += `<div class="card" style="background:#e3f2fd">
+        <b>${tglFormat}</b>
+      </div>`;
+
+      groupTanggal[tgl].forEach(t=>{
+        let warna = t.tipe === 'titip'? '#28a745' : t.tipe === 'ambil'? '#ffc107' : '#dc3545';
+        html += `<div class="card" style="margin-left:15px; border-left:4px solid ${warna}">
+          <b style="color:${warna}">${t.tipe.toUpperCase()}</b> - ${t.produk}: ${t.jumlah} pcs
+        </div>`;
+      });
+    }
+  }
+
+  document.getElementById("detail").innerHTML=html;
+}
+
+// ===== INIT =====
+document.getElementById("tanggal").value=new Date().toISOString().split("T")[0];
+
+renderWarung();
+renderProduk();
+renderTransaksi();
+renderDashboard();
+renderReminder();
+updateSelect();
+renderDetail();
+</script>
+
+</body>
+</html>
