@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebTorrent Auto Seeder P2P Rarest + PieceMap FIX</title>
+<title>WebTorrent Auto Seeder P2P Rarest + PieceMap FIX V2</title>
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
 body{font-family:system-ui;padding:16px;max-width:700px;margin:auto;background:#f5f5f5}
@@ -55,7 +55,7 @@ const TRACKERS = [
   "wss://tracker.fastcast.nz"
 ];
 const client=new WebTorrent();
-let seeders = {};
+let seeders = {}; // HARUS OBJECT
 let lastList = [];
 
 function log(t){document.getElementById('info').textContent=t}
@@ -69,9 +69,9 @@ function addManual(){
   addTorrent(h, "Manual");
 }
 
-/* FUNGSI UTAMA: TAMBAH TORRENT */
+/* FUNGSI UTAMA: TAMBAH TORRENT - FIX UTAMA DI SINI */
 function addTorrent(hash, sumber="GAS"){
-  if(seeders){
+  if(seeders[hash]){ // FIX 1: cek pake [hash]
     log("ℹ️ "+hash.substring(0,8)+"... sudah aktif");
     return;
   }
@@ -88,7 +88,7 @@ function addTorrent(hash, sumber="GAS"){
     announce: TRACKERS,
     maxConns: 80
   }, t=>{
-    seeders = t;
+    seeders[hash] = t; // FIX 2: simpan ke object, bukan timpa
     updateUI();
     log(`⬇️ ${sumber} Join swarm: ${hash.substring(0,8)}...`);
 
@@ -103,7 +103,7 @@ function addTorrent(hash, sumber="GAS"){
 
 /* FORCE ANNOUNCE */
 function forceAnnounce(hash){
-  let t = seeders;
+  let t = seeders[hash]; // FIX 3: ambil dari object
   if(!t) return;
   log("🔄 Force announce ke tracker...");
   t.discover();
@@ -152,7 +152,7 @@ function updateUI(){
   if(Object.keys(seeders).length === 0){listEl.innerHTML = "Belum ada torrent";return;}
 
   Object.keys(seeders).forEach(hash=>{
-    let t = seeders;
+    let t = seeders[hash]; // FIX 4: ambil dari object
     let div = document.createElement("div");
     let status = t.progress < 1? "Downloading" : "Seeding";
     div.className = "torrent " + (t.progress < 1? "active" : "done");
@@ -186,7 +186,7 @@ function updateUI(){
 
 function formatBytes(b){if(b===0)return '0B';const k=1024;const sizes=['B','KB','MB','GB'];const i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+sizes[i];}
 function copy(hash){navigator.clipboard.writeText(buildMagnet(hash));log("📋 Disalin");}
-function remove(hash){if(seeders){seeders.destroy();delete seeders;updateUI();log("❌ Torrent di-stop");}}
+function remove(hash){if(seeders[hash]){seeders[hash].destroy();delete seeders[hash];updateUI();log("❌ Torrent di-stop");}} // FIX 5
 
 /* CEK GAS TIAP 3 DETIK */
 async function cekGAS(){
@@ -202,7 +202,7 @@ async function cekGAS(){
     let isNew = JSON.stringify(arr.sort())!== JSON.stringify(lastList.sort());
     if(isNew){
       log("🆕 Ada magnet baru dari GAS. Auto join swarm...");
-      arr.forEach(hash=>{if(!seeders) addTorrent(hash, "GAS");});
+      arr.forEach(hash=>{if(!seeders[hash]) addTorrent(hash, "GAS");}); // FIX 6
       lastList = arr;
     }
   }catch(e){log("❌ GAS Error: "+e.message)}
