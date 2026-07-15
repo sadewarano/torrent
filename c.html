@@ -1,61 +1,122 @@
 <!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebTorrent Log Only</title>
+<title>WebTorrent Cooperative Seeder v5.3.0</title>
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
-body{font-family:system-ui;padding:16px;max-width:600px;margin:auto;background:#f5f5f5}
+body{font-family:system-ui;padding:16px;max-width:650px;margin:auto;background:#f5f5f5}
 input,button{width:100%;padding:12px;margin:8px 0;border-radius:8px;box-sizing:border-box}
-button{border:none;background:#2196F3;color:#fff;font-weight:600;cursor:pointer}
-.card{background:#fff;padding:12px;border-radius:8px;margin:10px 0}
-.badge{font-size:0.7em;background:#6366f1;color:#fff;padding:2px 6px;border-radius:4px}
-.log{font-size:0.8em;background:#111;color:#0f0;padding:10px;border-radius:4px;max-height:400px;overflow:auto;font-family:monospace;white-space:pre-wrap}
+button{border:none;color:#fff;font-weight:600;cursor:pointer}
+.btn-copy{background:#2196F3}
+.card{background:#fff;padding:12px;border-radius:8px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+.torrent{border-left:4px solid #9e9e9e;padding:8px;margin:8px 0;background:#fafafa;border-radius:4px}
+.torrent.pending{border-left-color:#9e9e9e}
+.torrent.downloading{border-left-color:#f59e0b}
+.torrent.seeding{border-left-color:#4CAF50}
+.torrent.prog{font-size:0.85em;color:#555}
+.torrent small{color:#888;word-break:break-all}
+.row{display:flex;gap:8px}
+.row button{width:50%;font-size:0.8em;padding:6px}
+.badge{font-size:0.7em;color:#fff;padding:3px 8px;border-radius:12px;margin-left:4px;font-weight:600}
+.badge.pending{background:#9e9e9e}
+.badge.downloading{background:#f59e0b}
+.badge.seeding{background:#4CAF50}
+.piece-map{display:flex;flex-wrap:wrap;gap:1px;margin-top:6px;padding:4px;background:#eee;border-radius:4px}
+.piece{width:3px;height:8px;border-radius:1px}
+.piece.pending{background:#bbb}
+.piece.downloading{background:#f59e0b}
+.piece.seeding{background:#4CAF50}
+.piece.target{background:#673AB7} /* Piece yg kita incar */
+.legend{display:flex;gap:12px;font-size:0.75em;margin-top:8px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.node-id{font-size:0.8em;background:#673AB7;color:#fff;padding:3px 8px;border-radius:12px;margin-left:4px}
 </style></head><body>
-<h2>🌱 WebTorrent Auto Seeder <span class="badge">RAREST</span></h2>
+<h2>🌱 WebTorrent Cooperative v5.3.0</h2>
+<div>Node ID: <span id="nodeId" class="node-id">-</span></div>
 
-<input id="magnet" placeholder="Tempel magnet BTIH disini">
-<button onclick="addManual()">➕ TAMBAH & SEED</button>
-<button onclick="clearLog()" style="background:#666">🧹 Clear Log</button>
+<input id="magnet" placeholder="Tempel magnet / hash BTIH manual">
+<button class="btn-copy" onclick="addManual()">➕ Tambah & Download/Seed</button>
 
-<div class="card">Status: <span id="info">Idle</span> | Aktif: <span id="count">0</span>/5 Torrent</div>
-
-<div class="card">
-<h3>📜 Log Aktivitas</h3>
-<div id="logBox" class="log"></div>
+<div class="card" id="info">ℹ️ Menunggu magnet baru dari GAS...</div>
+<div class="card">Aktif: <span id="count">0</span>/5 | Pending: <span id="pendingCount">0</span>
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#bbb"></div> Belum Ada</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#673AB7"></div> Target Kita</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Punya Kita</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div> Selesai</div>
+</div>
 </div>
 
+<div class="card"><h3>🌐 Daftar Seeder Aktif Max 5</h3><div id="listSeeder"></div></div>
+
 <script>
+const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
+const MAX_SEEDER = 5;
+const PENDING_TIMEOUT = 60000;
 const TRACKERS = [
   "wss://tracker.openwebtorrent.com",
   "wss://tracker.btorrent.xyz",
-  "wss://tracker.webtorrent.dev"
+  "wss://tracker.webtorrent.dev",
+  "wss://tracker.fastcast.nz"
 ];
-const MAX_SEEDER = 5;
-const client = new WebTorrent();
-let seeders = {}; // {hash: torrent}
+const client=new WebTorrent();
+const NODE_ID = Math.random().toString(36).substring(2,8);
+document.getElementById('nodeId').textContent = NODE_ID;
 
-function log(t){
-  document.getElementById('info').textContent = t;
-  let box = document.getElementById('logBox');
-  box.innerHTML += `[${new Date().toLocaleTimeString()}] ${t}\n`;
-  box.scrollTop = box.scrollHeight;
-}
+let seeders = {};
+let pending = {};
+let progressTracker = {};
+let checking = false;
 
-function clearLog(){
-  document.getElementById('logBox').innerHTML = "";
-}
+function log(t){document.getElementById('info').textContent=t}
+function extractHash(v){let m=v.match(/btih:([a-f0-9]{40})/i);if(m)return m[1].toLowerCase();if(/^[a-f0-9]{40}$/i.test(v))return v.toLowerCase();return null;}
+function buildMagnet(h){let m='magnet:?xt=urn:btih:'+h; TRACKERS.forEach(tr=>m+="&tr="+encodeURIComponent(tr)); return m;}
 
-function extractHash(v){
-  let m=v.match(/btih:([a-f0-9]{40})/i);
-  if(m)return m[1].toLowerCase();
-  if(/^[a-f0-9]{40}$/i.test(v))return v.toLowerCase();
-  return null;
-}
+// CORE: COOPERATIVE PICKER
+function setupCooperativePicker(torrent){
+  if(torrent._cooperative) return;
+  torrent._cooperative = true;
+  torrent._targetPieces = new Set();
 
-function buildMagnet(h){
-  let m='magnet:?xt=urn:btih:'+h;
-  TRACKERS.forEach(tr=>m+="&tr="+encodeURIComponent(tr));
-  return m;
+  const pickerInterval = setInterval(()=>{
+    if(torrent.done || torrent.noMorePieces) return;
+    if(torrent.wires.length === 0) return;
+
+    const totalPieces = torrent.pieces.length;
+    let pieceAvailability = new Array(totalPieces).fill(0);
+
+    // 1. Hitung availability: berapa peer yg punya piece i
+    for(let i=0; i<totalPieces; i++){
+      if(torrent.bitfield.get(i)) continue; // sudah kita punya, skip
+      for(const wire of torrent.wires){
+        if(wire.peerPieces.get(i)) pieceAvailability[i]++;
+      }
+    }
+
+    // 2. Cari 3 piece paling langka yg belum kita punya
+    let candidates = [];
+    for(let i=0; i<totalPieces; i++){
+      if(!torrent.bitfield.get(i) && pieceAvailability[i] > 0){
+        candidates.push({index: i, rarity: pieceAvailability[i]});
+      }
+    }
+    candidates.sort((a,b)=> a.rarity - b.rarity); // paling langka duluan
+
+    // 3. Deselect target lama, select target baru
+    torrent.deselect(0, totalPieces - 1, 1);
+    torrent._targetPieces.clear();
+
+    const toSelect = Math.min(3, candidates.length);
+    for(let i=0; i<toSelect; i++){
+      const piece = candidates[i].index;
+      torrent._targetPieces.add(piece);
+      torrent.select(piece, piece, 1); // priority 1
+    }
+
+  }, 1000);
+
+  torrent.on('close', ()=> clearInterval(pickerInterval));
 }
 
 function addManual(){
@@ -65,85 +126,176 @@ function addManual(){
 }
 
 function addTorrent(hash, sumber="GAS"){
-  if(seeders.hasOwnProperty(hash)){
-    log(`Skip: ${hash.substring(0,8)}... sudah aktif`);
+  const total = Object.keys(seeders).length + Object.keys(pending).length;
+  if(seeders[hash] || pending[hash]){
+    log("ℹ️ "+hash.substring(0,8)+"... sudah aktif/pending");
     return;
   }
-  if(Object.keys(seeders).length >= MAX_SEEDER){
-    let firstHash = Object.keys(seeders)[0];
-    remove(firstHash);
+  if(total >= MAX_SEEDER){
+    let firstHash = Object.keys(seeders)[0] || Object.keys(pending)[0];
+    if(firstHash) removeTorrent(firstHash, "Auto hapus FIFO");
   }
 
-  log(`⬇️ ${sumber}: Menambah ${hash.substring(0,8)}...`);
+  let pendingTimeout = setTimeout(()=>{
+    if(pending[hash]) removeTorrent(hash, "Timeout Pending");
+  }, PENDING_TIMEOUT);
 
-  client.add(buildMagnet(hash), {
-    strategy: 'rarest', // Kunci biar gak stuck 89%
-    announce: TRACKERS,
-    maxConns: 100
-  }, t=>{
-    seeders = t;
-    updateCount();
-    log(`✅ JOIN: ${t.name} | Hash: ${hash.substring(0,8)}`);
+  pending[hash] = {timeoutID: pendingTimeout};
+  updateUI();
 
-    t.on('metadata', ()=> log(`📦 Metadata: ${t.name} | Size: ${formatBytes(t.length)}`));
+  client.add(buildMagnet(hash), {announce: TRACKERS}, t=>{
+    if(!pending[hash]){
+      t.destroy();
+      log(`⚠️ ${hash.substring(0,8)}... Callback terlambat. Dibuang`);
+      return;
+    }
 
-    t.on('download', ()=> {
-      if(Math.round(t.progress*100) % 5 === 0){ // log tiap 5%
-        log(`⬇️ ${t.name} | ${Math.round(t.progress*100)}% | Peer: ${t.numPeers} | ↓${formatBytes(t.downloadSpeed)}/s ↑${formatBytes(t.uploadSpeed)}/s`);
+    clearTimeout(pending[hash].timeoutID);
+    delete pending[hash];
+
+    seeders[hash] = t;
+    progressTracker[hash] = {last: 0, time: Date.now()};
+
+    setupCooperativePicker(t); // [BARU] Aktifkan cooperative picker
+
+    updateUI();
+    log(`⬇️ ${sumber} Node ${NODE_ID}: ${hash.substring(0,8)}...`);
+
+    t.on("metadata", ()=> updateUI());
+
+    let stallCheck = setInterval(()=>{
+      if(!seeders[hash]){clearInterval(stallCheck);return;}
+      let curr = t.progress;
+      let tracker = progressTracker[hash];
+      if(!tracker){clearInterval(stallCheck);return;}
+
+      if(curr > tracker.last){
+        tracker.last = curr;
+        tracker.time = Date.now();
+      } else if(Date.now() - tracker.time > 300000){
+        log(`⏰ Stuck: ${hash.substring(0,8)}... ${Math.round(curr*100)}% 5 menit. Dihapus`);
+        clearInterval(stallCheck);
+        removeTorrent(hash, "Stuck");
       }
+      if(t.done){
+        clearInterval(stallCheck);
+        delete progressTracker[hash];
+      }
+    }, 10000);
+
+    t.on("error", e=>{
+      console.error(e);
+      clearInterval(stallCheck);
+      if(pending[hash]) clearTimeout(pending[hash].timeoutID);
+      log("❌ Error: " + hash.substring(0,8) + " - " + e.message);
+      removeTorrent(hash, "Error");
     });
 
-    t.on('wire', ()=> log(`🔗 Peer baru: ${t.name} | Total Peer: ${t.numPeers}`));
-
-    t.on('done', ()=> {
-      log(`✅ 100% SEEDING: ${t.name}`);
-      updateCount();
-    });
-
-    t.on('error', (err)=> {
-      log(`❌ ERROR: ${hash.substring(0,8)}... | ${err.message}`);
-      delete seeders;
-      updateCount();
+    t.on("done", ()=>{
+      clearInterval(stallCheck);
+      delete progressTracker[hash];
+      log(`✅ ${hash.substring(0,8)}... 100%. Mode Seeder`);
+      updateUI();
     });
   });
 }
 
-function updateCount(){
-  document.getElementById('count').textContent = Object.keys(seeders).length;
-}
-
-function formatBytes(b){
-  if(b===0)return '0B';
-  const k=1024;
-  const sizes=['B','KB','MB','GB'];
-  const i=Math.floor(Math.log(b)/Math.log(k));
-  return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+sizes[i];
-}
-
-function remove(hash){
-  if(seeders){
-    seeders.destroy();
-    delete seeders;
-  }
-  log(`🗑️ STOP: ${hash.substring(0,8)}...`);
-  updateCount();
-}
-
-// Auto cek GAS tiap 3 detik
-setInterval(async ()=>{
-  try{
-    const res=await fetch("https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec?t="+Date.now());
-    const data=await res.json();
-    let kode = Array.isArray(data)? data[data.length-1].kode : data.kode;
-    if(!kode) return;
-    let arr = [...new Set(kode.split(",").filter(Boolean).map(extractHash).filter(Boolean))];
-    arr.forEach(h=>{
-      if(!seeders.hasOwnProperty(h)) addTorrent(h, "GAS");
+function removeTorrent(hash, alasan="Manual"){
+  if(seeders[hash]){
+    delete progressTracker[hash];
+    seeders[hash].destroy(()=>{
+      delete seeders[hash];
+      updateUI();
+      log(`🗑️ ${alasan}: ${hash.substring(0,8)}...`);
     });
-  }catch(e){
-    log(`❌ GAS Error: ${e.message}`);
   }
-}, 3000);
+  if(pending[hash]){
+    clearTimeout(pending[hash].timeoutID);
+    delete pending[hash];
+    updateUI();
+    log(`🗑️ ${alasan}: ${hash.substring(0,8)}...`);
+  }
+}
 
-log("🚀 WebTorrent Siap. Menunggu magnet dari Manual / GAS...");
+function renderPieceMap(torrent){
+  if(!torrent.pieces) return '<div class="prog">Menunggu metadata...</div>';
+  const totalPieces = torrent.pieces.length;
+  let html = '<div class="piece-map">';
+  for(let i=0; i<totalPieces; i++){
+    let cls = "piece pending";
+    if(torrent.bitfield && torrent.bitfield.get(i)) cls = torrent.done? "piece seeding" : "piece downloading";
+    if(torrent._targetPieces && torrent._targetPieces.has(i)) cls = "piece target";
+    html += `<span class="${cls}" title="Piece ${i}"></span>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function updateUI(){
+  document.getElementById('count').textContent = Object.keys(seeders).length;
+  document.getElementById('pendingCount').textContent = Object.keys(pending).length;
+  let listEl = document.getElementById('listSeeder');
+  listEl.innerHTML = "";
+  if(Object.keys(seeders).length === 0 && Object.keys(pending).length === 0){listEl.innerHTML = "Belum ada torrent";return;}
+
+  Object.keys(pending).forEach(hash=>{
+    let div = document.createElement("div");
+    div.className = "torrent pending";
+    div.innerHTML = `<b>${hash.substring(0,16)}...</b> <span class="badge pending">PENDING</span><br><div class="prog">Menunggu metadata... 60s</div>`;
+    listEl.appendChild(div);
+  });
+
+  Object.keys(seeders).forEach(hash=>{
+    let t = seeders[hash];
+    let status = t.done? "seeding" : "downloading";
+    let label = {downloading:"DOWNLOAD", seeding:"SEEDING"};
+    let div = document.createElement("div");
+    div.className = "torrent " + status;
+    let prog = Math.round(t.progress*100);
+    let peers = t.numPeers;
+    let up = formatBytes(t.uploadSpeed);
+    let down = formatBytes(t.downloadSpeed);
+    div.innerHTML = `<b>${t.name || hash.substring(0,16)}...</b> <span class="badge ${status}">${label[status]}</span><br><div class="prog">${prog}% | Peer: ${peers} | ↑${up}/s ↓${down}/s</div>${renderPieceMap(t)}<small>Hash: ${hash}</small><div class="row"><button onclick="copy('${hash}')" style="background:#2196F3">📋 Copy Magnet</button><button onclick="removeTorrent('${hash}')" style="background:#f44336">❌ Stop</button></div>`;
+    listEl.appendChild(div);
+  });
+}
+
+function formatBytes(b){if(b===0)return '0B';const k=1024;const sizes=['B','KB','MB','GB'];const i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+sizes[i];}
+
+function copy(hash){
+  navigator.clipboard.writeText(buildMagnet(hash))
+ .then(()=>log("📋 Magnet lengkap disalin"))
+ .catch(()=>alert("Gagal menyalin"));
+}
+
+async function cekGAS(){
+  if(checking) return;
+  checking = true;
+  try{
+    const res=await fetch(API+"?t="+Date.now(), {cache: "no-store"});
+    const data=await res.json();
+    let kode="";
+    if(Array.isArray(data)&&data.length){kode=data[data.length-1].kode||"";}
+    else if(data&&data.kode){kode=data.kode;}
+    if(!kode) return;
+
+    let arr = [...new Set(kode.split(",").filter(Boolean).map(extractHash).filter(Boolean))];
+    const gasSet = new Set(arr);
+
+    arr.forEach(hash=>{
+      const total = Object.keys(seeders).length + Object.keys(pending).length;
+      if(!seeders[hash] &&!pending[hash] && total < MAX_SEEDER) addTorrent(hash, "GAS");
+    });
+
+    Object.keys(seeders).forEach(hash=>{
+      if(!gasSet.has(hash)) removeTorrent(hash, "Tidak ada di GAS");
+    });
+
+  }catch(e){log("❌ GAS Error: "+e.message)}
+  finally{checking = false;}
+}
+
+cekGAS();
+setInterval(cekGAS, 3000);
+setInterval(updateUI, 1000);
 </script></body></html>
