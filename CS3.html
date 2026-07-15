@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebTorrent Auto Seeder P2P Rarest</title>
+<title>WebTorrent Auto Seeder P2P Rarest + PieceMap</title>
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
-body{font-family:system-ui;padding:16px;max-width:600px;margin:auto;background:#f5f5f5}
+body{font-family:system-ui;padding:16px;max-width:700px;margin:auto;background:#f5f5f5}
 input,button{width:100%;padding:12px;margin:8px 0;border-radius:8px;box-sizing:border-box}
 button{border:none;color:#fff;font-weight:600;cursor:pointer}
 .btn-copy{background:#2196F3}
@@ -19,8 +19,20 @@ button:disabled{background:#aaa;cursor:not-allowed}
 .row{display:flex;gap:8px}
 .row button{width:50%}
 .badge{font-size:0.7em;background:#6366f1;color:#fff;padding:2px 6px;border-radius:4px}
+
+/* PIECE MAP */
+.piecemap{margin-top:8px}
+.piecemap-title{font-size:0.8em;font-weight:600;margin-bottom:4px}
+.pieces{display:flex;flex-wrap:wrap;gap:1px}
+.piece{width:8px;height:8px;background:#e0e0e0;border-radius:1px}
+.piece.have{background:#4CAF50} /* ijo = sudah punya */
+.piece.downloading{background:#f59e0b;animation:blink 1s infinite} /* kuning kedip = lagi download */
+@keyframes blink{50%{opacity:0.3}}
+.legend{display:flex;gap:10px;font-size:0.7em;margin-top:4px}
+.legend span{display:flex;align-items:center;gap:4px}
+.legend i{width:8px;height:8px;border-radius:1px;display:inline-block}
 </style></head><body>
-<h2>🌱 WebTorrent Auto Seeder P2P</h2>
+<h2>🌱 WebTorrent Auto Seeder P2P + RAREST</h2>
 
 <input id="magnet" placeholder="Tempel magnet / hash BTIH manual">
 <button class="btn-copy" onclick="addManual()">➕ Tambah & Download/Seed</button>
@@ -59,11 +71,7 @@ function addManual(){
 
 /* FUNGSI UTAMA: TAMBAH TORRENT */
 function addTorrent(hash, sumber="GAS"){
-  if(seeders[hash]){
-    log("ℹ️ "+hash.substring(0,8)+"... sudah aktif");
-    return;
-  }
-
+  if(seeders[hash]){log("ℹ️ "+hash.substring(0,8)+"... sudah aktif");return;}
   if(Object.keys(seeders).length >= MAX_SEEDER){
     let firstHash = Object.keys(seeders)[0];
     seeders[firstHash].destroy();
@@ -71,12 +79,10 @@ function addTorrent(hash, sumber="GAS"){
     log("🗑️ Hapus torrent lama: "+firstHash.substring(0,8)+"...");
   }
 
-  // FIX 1: HAPUS path '/tmp'
-  // FIX 2: TAMBAH strategy rarest + announce
   client.add(buildMagnet(hash), {
-    strategy: 'rarest',
+    strategy: 'rarest', // PENTING: mode rarest
     announce: TRACKERS,
-    maxConns: 55
+    maxConns: 80
   }, t=>{
     seeders[hash] = t;
     updateUI();
@@ -86,15 +92,8 @@ function addTorrent(hash, sumber="GAS"){
     t.on("upload", ()=> updateUI());
     t.on("wire", ()=> updateUI());
     t.on("metadata", ()=> updateUI());
-
-    t.on("done", ()=>{
-      log(`✅ ${hash.substring(0,8)}... 100%. Mode Seeder`);
-      updateUI();
-    });
-    t.on("error", e => {
-      log("❌ Error: " + e.message);
-      console.error(e);
-    });
+    t.on("done", ()=>{log(`✅ ${hash.substring(0,8)}... 100%. Mode Seeder`); updateUI();});
+    t.on("error", e => {log("❌ Error: " + e.message);});
   });
 }
 
@@ -103,8 +102,35 @@ function forceAnnounce(hash){
   let t = seeders[hash];
   if(!t) return;
   log("🔄 Force announce ke tracker...");
-  t.discover(); // tembak DHT + Tracker
+  t.discover();
   setTimeout(()=>log("✅ Force selesai. Tunggu 5-10 detik"), 1000);
+}
+
+/* RENDER PIECE MAP */
+function renderPieceMap(t){
+  if(!t.pieces) return '<div class="piecemap-title">Piece Map: Loading metadata...</div>';
+
+  let html = '<div class="piecemap"><div class="piecemap-title">Piece Map: '+t.pieces.length+' pieces</div><div class="pieces">';
+
+  for(let i=0; i<t.pieces.length; i++){
+    let cls = "piece";
+    if(t.pieces[i]) cls += " have"; // sudah punya
+    // cek apakah piece ini lagi di request ke peer
+    if(t._selections){
+        t._selections.forEach(sel=>{
+            if(i >= sel.from && i <= sel.to &&!t.pieces[i]) cls = "piece downloading";
+        })
+    }
+    html += `<div class="${cls}" title="Piece ${i}"></div>`;
+  }
+  html += `</div>
+    <div class="legend">
+        <span><i style="background:#4CAF50"></i> Punya</span>
+        <span><i style="background:#f59e0b"></i> Download</span>
+        <span><i style="background:#e0e0e0"></i> Belum</span>
+    </div>
+  </div>`;
+  return html;
 }
 
 /* UPDATE UI */
@@ -112,11 +138,7 @@ function updateUI(){
   document.getElementById('count').textContent = Object.keys(seeders).length;
   let listEl = document.getElementById('listSeeder');
   listEl.innerHTML = "";
-
-  if(Object.keys(seeders).length === 0){
-    listEl.innerHTML = "Belum ada torrent";
-    return;
-  }
+  if(Object.keys(seeders).length === 0){listEl.innerHTML = "Belum ada torrent";return;}
 
   Object.keys(seeders).forEach(hash=>{
     let t = seeders[hash];
@@ -139,6 +161,7 @@ function updateUI(){
     div.innerHTML = `
       <b>${name}</b><br>
       <div class="prog">Status: ${status} | ${prog}% | Peer: ${peers} | ↑${up} ↓${down}</div>
+      ${renderPieceMap(t)}
       ${peerHtml}
       <div class="row">
         <button onclick="forceAnnounce('${hash}')" class="btn-force">⚡ Force Announce</button>
@@ -163,16 +186,12 @@ async function cekGAS(){
     if(Array.isArray(data)&&data.length){kode=data[data.length-1].kode||"";}
     else if(data&&data.kode){kode=data.kode;}
     if(!kode) return;
-
     let arr = kode.split(",").filter(Boolean).map(extractHash).filter(Boolean);
     arr = [...new Set(arr)];
-
     let isNew = JSON.stringify(arr.sort())!== JSON.stringify(lastList.sort());
     if(isNew){
       log("🆕 Ada magnet baru dari GAS. Auto join swarm...");
-      arr.forEach(hash=>{
-        if(!seeders[hash]) addTorrent(hash, "GAS");
-      });
+      arr.forEach(hash=>{if(!seeders[hash]) addTorrent(hash, "GAS");});
       lastList = arr;
     }
   }catch(e){log("❌ GAS Error: "+e.message)}
@@ -180,4 +199,5 @@ async function cekGAS(){
 
 cekGAS();
 setInterval(cekGAS, 3000);
+setInterval(updateUI, 1000); // update UI tiap 1 detik biar piecemap gerak
 </script></body></html>
