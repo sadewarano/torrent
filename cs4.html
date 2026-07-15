@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebTorrent Auto Seeder P2P Rarest + PieceMap v3</title>
+<title>WebTorrent Auto Seeder P2P + PieceMap v3.2 FIX</title>
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
 body{font-family:system-ui;padding:16px;max-width:700px;margin:auto;background:#f5f5f5}
@@ -23,21 +23,21 @@ button{border:none;color:#fff;font-weight:600;cursor:pointer}
 .piecemap{margin-top:8px}
 .piecemap-title{font-size:0.8em;font-weight:600;margin-bottom:4px}
 .pieces{display:flex;flex-wrap:wrap;gap:1px}
-.piece{width:8px;height:8px;background:#e0e0e0;border-radius:1px} /* 1. ABU = Belum punya */
-.piece.have{background:#4CAF50} /* 3. IJO = Sudah punya/Seeder */
-.piece.downloading{background:#f59e0b;animation:blink 1s infinite} /* 2. KUNING KEDIP = Lagi download */
+.piece{width:8px;height:8px;background:#e0e0e0;border-radius:1px} /* ABU = Belum */
+.piece.have{background:#4CAF50} /* IJO = Sudah */
+.piece.downloading{background:#f59e0b;animation:blink 1s infinite} /* KUNING = Download */
 @keyframes blink{50%{opacity:0.3}}
 .legend{display:flex;gap:10px;font-size:0.7em;margin-top:4px}
 .legend span{display:flex;align-items:center;gap:4px}
 .legend i{width:8px;height:8px;border-radius:1px;display:inline-block}
 </style></head><body>
-<h2>🌱 WebTorrent Auto Seeder P2P + RAREST v3</h2>
+<h2>🌱 WebTorrent Auto Seeder P2P + PieceMap</h2>
 
 <input id="magnet" placeholder="Tempel magnet / hash BTIH manual">
 <button class="btn-copy" onclick="addManual()">➕ Tambah & Download/Seed</button>
 
 <div class="card" id="info">ℹ️ Menunggu magnet baru dari GAS...</div>
-<div class="card">Torrent Aktif: <span id="count">0</span>/5 | Mode: <span class="badge">RAREST</span></div>
+<div class="card">Torrent Aktif: <span id="count">0</span>/5</div>
 
 <div class="card">
 <h3>🌐 Daftar Torrent Aktif Max 5</h3>
@@ -55,7 +55,7 @@ const TRACKERS = [
   "wss://tracker.fastcast.nz"
 ];
 const client=new WebTorrent();
-let seeders = {};
+let seeders = {}; // HARUS OBJECT
 let seenHashes = new Set();
 
 function log(t){document.getElementById('info').textContent=t}
@@ -69,7 +69,8 @@ function addManual(){
 }
 
 function addTorrent(hash, sumber="GAS"){
-  if(seeders){log("ℹ️ "+hash.substring(0,8)+"... sudah aktif");return;}
+  if(seeders[hash]){log("ℹ️ "+hash.substring(0,8)+"... sudah aktif");return;} // [FIX 1]
+
   if(Object.keys(seeders).length >= MAX_SEEDER){
     let firstHash = Object.keys(seeders)[0];
     seeders[firstHash].destroy();
@@ -78,7 +79,7 @@ function addTorrent(hash, sumber="GAS"){
   }
 
   client.add(buildMagnet(hash), {announce: TRACKERS, maxConns: 80}, t=>{
-    seeders = t;
+    seeders[hash] = t; // [FIX 2 PENTING] Harus pakai [hash]
     seenHashes.add(hash);
     updateUI();
     log(`⬇️ ${sumber} Join swarm: ${hash.substring(0,8)}...`);
@@ -93,20 +94,19 @@ function addTorrent(hash, sumber="GAS"){
 }
 
 function forceAnnounce(hash){
-  let t = seeders;
+  let t = seeders[hash]; // [FIX 3]
   if(!t) return;
   log("🔄 Force announce ke tracker...");
   t.discover();
   setTimeout(()=>log("✅ Force selesai. Tunggu 5-10 detik"), 1000);
 }
 
-/* RENDER PIECE MAP V3 - LOGIKA WARNA BARU */
 function renderPieceMap(t){
   if(!t.pieces) return '<div class="piecemap-title">Piece Map: Loading metadata...</div>';
 
   let downloadingPieces = new Set();
   try {
-    if(t._selections){
+    if(t._selections && t._selections.length > 0){
         t._selections.forEach(sel=>{
             for(let i=sel.from; i<=sel.to; i++) downloadingPieces.add(i);
         })
@@ -116,23 +116,14 @@ function renderPieceMap(t){
   let html = `<div class="piecemap"><div class="piecemap-title">Piece Map: ${t.pieces.length} pieces</div><div class="pieces">`;
 
   for(let i=0; i<t.pieces.length; i++){
-    let cls = "piece"; // Default = ABU
-
-    // PRIORITAS 1: Kalau sudah punya = IJO. Ini paling penting
-    if(t.pieces[i]) {
-      cls = "piece have";
-    }
-    // PRIORITAS 2: Kalau lagi di-request = KUNING. Tapi hanya kalau belum punya
-    else if(downloadingPieces.has(i)) {
-      cls = "piece downloading";
-    }
-    // PRIORITAS 3: Sisanya tetap ABU
-
+    let cls = "piece"; // Default ABU
+    if(t.pieces[i]) { cls = "piece have"; } // 1. Cek IJO dulu
+    else if(downloadingPieces.has(i)) { cls = "piece downloading"; } // 2. Baru KUNING
     html += `<div class="${cls}" title="Piece ${i}"></div>`;
   }
   html += `</div>
     <div class="legend">
-        <span><i style="background:#4CAF50"></i> Punya/Seeder</span>
+        <span><i style="background:#4CAF50"></i> Punya</span>
         <span><i style="background:#f59e0b"></i> Download</span>
         <span><i style="background:#e0e0e0"></i> Belum</span>
     </div>
@@ -147,7 +138,7 @@ function updateUI(){
   if(Object.keys(seeders).length === 0){listEl.innerHTML = "Belum ada torrent";return;}
 
   Object.keys(seeders).forEach(hash=>{
-    let t = seeders;
+    let t = seeders[hash]; // [FIX 4]
     let div = document.createElement("div");
     let status = t.progress < 1? "Downloading" : "Seeding";
     div.className = "torrent " + (t.progress < 1? "active" : "done");
@@ -181,7 +172,15 @@ function updateUI(){
 
 function formatBytes(b){if(b===0)return '0B';const k=1024;const sizes=['B','KB','MB','GB'];const i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+sizes[i];}
 function copy(hash){navigator.clipboard.writeText(buildMagnet(hash));log("📋 Disalin");}
-function remove(hash){if(seeders){seeders.destroy();delete seeders;updateUI();log("❌ Torrent di-stop");}}
+function remove(hash){
+  if(seeders[hash]){ // [FIX 5]
+    seeders[hash].destroy();
+    seenHashes.delete(hash);
+    delete seeders[hash];
+    updateUI();
+    log("❌ Torrent di-stop");
+  }
+}
 
 async function cekGAS(){
   try{
@@ -196,7 +195,7 @@ async function cekGAS(){
 
     let newFound = false;
     arr.forEach(hash=>{
-      if(!seenHashes.has(hash) &&!seeders){
+      if(!seenHashes.has(hash) &&!seeders[hash]){ // [FIX 6]
         addTorrent(hash, "GAS");
         newFound = true;
       }
