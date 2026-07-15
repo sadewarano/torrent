@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebTorrent Auto Seeder P2P Rarest + PieceMap FIX V2</title>
+<title>WebTorrent Auto Seeder P2P Rarest + PieceMap FINAL</title>
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
 body{font-family:system-ui;padding:16px;max-width:700px;margin:auto;background:#f5f5f5}
@@ -24,7 +24,7 @@ button:disabled{background:#aaa;cursor:not-allowed}
 .piecemap{margin-top:8px}
 .piecemap-title{font-size:0.8em;font-weight:600;margin-bottom:4px}
 .pieces{display:flex;flex-wrap:wrap;gap:1px}
-.piece{width:8px;height:8px;background:#e0e0e0;border-radius:1px} /* ABU = BELUM */
+.piece{width:8px;height:8px;background:#e0e0e0;border-radius:1px} /* ABU = BELUM PUNYA */
 .piece.have{background:#4CAF50} /* IJO = SUDAH PUNYA */
 .piece.downloading{background:#f59e0b;animation:blink 1s infinite} /* KUNING = LAGI DOWNLOAD */
 @keyframes blink{50%{opacity:0.3}}
@@ -55,27 +55,24 @@ const TRACKERS = [
   "wss://tracker.fastcast.nz"
 ];
 const client=new WebTorrent();
-let seeders = {}; // HARUS OBJECT
+let seeders = {};
 let lastList = [];
 
 function log(t){document.getElementById('info').textContent=t}
 function extractHash(v){let m=v.match(/btih:([a-f0-9]{40})/i);if(m)return m[1].toLowerCase();if(/^[a-f0-9]{40}$/i.test(v))return v.toLowerCase();return null;}
 function buildMagnet(h){let m='magnet:?xt=urn:btih:'+h; TRACKERS.forEach(tr=>m+="&tr="+encodeURIComponent(tr)); return m;}
 
-/* TAMBAH MANUAL */
 function addManual(){
   let h = extractHash(magnet.value.trim());
   if(!h){alert("Hash tidak valid");return;}
   addTorrent(h, "Manual");
 }
 
-/* FUNGSI UTAMA: TAMBAH TORRENT - FIX UTAMA DI SINI */
 function addTorrent(hash, sumber="GAS"){
-  if(seeders[hash]){ // FIX 1: cek pake [hash]
+  if(seeders){
     log("ℹ️ "+hash.substring(0,8)+"... sudah aktif");
     return;
   }
-
   if(Object.keys(seeders).length >= MAX_SEEDER){
     let firstHash = Object.keys(seeders)[0];
     seeders[firstHash].destroy();
@@ -88,7 +85,7 @@ function addTorrent(hash, sumber="GAS"){
     announce: TRACKERS,
     maxConns: 80
   }, t=>{
-    seeders[hash] = t; // FIX 2: simpan ke object, bukan timpa
+    seeders = t;
     updateUI();
     log(`⬇️ ${sumber} Join swarm: ${hash.substring(0,8)}...`);
 
@@ -101,38 +98,39 @@ function addTorrent(hash, sumber="GAS"){
   });
 }
 
-/* FORCE ANNOUNCE */
 function forceAnnounce(hash){
-  let t = seeders[hash]; // FIX 3: ambil dari object
+  let t = seeders;
   if(!t) return;
   log("🔄 Force announce ke tracker...");
   t.discover();
   setTimeout(()=>log("✅ Force selesai. Tunggu 5-10 detik"), 1000);
 }
 
-/* RENDER PIECE MAP - LOGIKA BENER */
+/* RENDER PIECE MAP - FINAL FIX */
 function renderPieceMap(t){
   if(!t.pieces) return '<div class="piecemap-title">Piece Map: Loading metadata...</div>';
 
   let html = '<div class="piecemap"><div class="piecemap-title">Piece Map: '+t.pieces.length+' pieces</div><div class="pieces">';
 
   for(let i=0; i<t.pieces.length; i++){
-    let cls = "piece"; // Default: ABU = Belum punya
-
-    if(t.pieces[i]){
-      cls = "piece have"; // IJO = Sudah punya
-    } else {
-      // Kalau belum punya, cek apakah lagi di download
-      let isDownloadingThisPiece = false;
-      if(t._selections){
-        t._selections.forEach(sel=>{
-          if(i >= sel.from && i <= sel.to) isDownloadingThisPiece = true;
-        })
-      }
-      if(isDownloadingThisPiece) cls = "piece downloading"; // KUNING = Lagi download
+    // PRIORITAS 1: Kalau sudah punya = IJO
+    if(t.pieces[i] === true){
+      html += `<div class="piece have" title="Piece ${i}: Punya"></div>`;
+      continue; // langsung lanjut, skip cek lain
     }
 
-    html += `<div class="${cls}" title="Piece ${i}"></div>`;
+    // PRIORITAS 2: Kalau lagi di download = KUNING
+    let isDownloading = false;
+    if(t._selections && t._selections.length){
+      isDownloading = t._selections.some(sel => i >= sel.from && i <= sel.to);
+    }
+
+    if(isDownloading){
+      html += `<div class="piece downloading" title="Piece ${i}: Download"></div>`;
+    } else {
+      // PRIORITAS 3: Default = ABU = Belum
+      html += `<div class="piece" title="Piece ${i}: Belum"></div>`;
+    }
   }
   html += `</div>
     <div class="legend">
@@ -144,7 +142,6 @@ function renderPieceMap(t){
   return html;
 }
 
-/* UPDATE UI */
 function updateUI(){
   document.getElementById('count').textContent = Object.keys(seeders).length;
   let listEl = document.getElementById('listSeeder');
@@ -152,7 +149,7 @@ function updateUI(){
   if(Object.keys(seeders).length === 0){listEl.innerHTML = "Belum ada torrent";return;}
 
   Object.keys(seeders).forEach(hash=>{
-    let t = seeders[hash]; // FIX 4: ambil dari object
+    let t = seeders;
     let div = document.createElement("div");
     let status = t.progress < 1? "Downloading" : "Seeding";
     div.className = "torrent " + (t.progress < 1? "active" : "done");
@@ -186,9 +183,8 @@ function updateUI(){
 
 function formatBytes(b){if(b===0)return '0B';const k=1024;const sizes=['B','KB','MB','GB'];const i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+sizes[i];}
 function copy(hash){navigator.clipboard.writeText(buildMagnet(hash));log("📋 Disalin");}
-function remove(hash){if(seeders[hash]){seeders[hash].destroy();delete seeders[hash];updateUI();log("❌ Torrent di-stop");}} // FIX 5
+function remove(hash){if(seeders){seeders.destroy();delete seeders;updateUI();log("❌ Torrent di-stop");}}
 
-/* CEK GAS TIAP 3 DETIK */
 async function cekGAS(){
   try{
     const res=await fetch(API+"?t="+Date.now());
@@ -202,7 +198,7 @@ async function cekGAS(){
     let isNew = JSON.stringify(arr.sort())!== JSON.stringify(lastList.sort());
     if(isNew){
       log("🆕 Ada magnet baru dari GAS. Auto join swarm...");
-      arr.forEach(hash=>{if(!seeders[hash]) addTorrent(hash, "GAS");}); // FIX 6
+      arr.forEach(hash=>{if(!seeders) addTorrent(hash, "GAS");});
       lastList = arr;
     }
   }catch(e){log("❌ GAS Error: "+e.message)}
