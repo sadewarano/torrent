@@ -3,43 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>P2P Chat Ringkas</title>
+<title>P2P Multi Chat</title>
 <style>
-body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:500px;margin:auto}
+body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:600px;margin:auto}
 .card{background:#fff;padding:14px;border-radius:12px;margin:10px 0;box-shadow:0 2px 6px rgba(0,0,0,0.1)}
 .status{text-align:center;color:#666;font-size:.9em}
-textarea{width:100%;height:120px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:.8em}
-.row{display:flex;gap:8px}
-button{flex:1;padding:12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;cursor:pointer}
+textarea{width:100%;height:100px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:.8em}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{flex:1;padding:10px 12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;cursor:pointer;font-size:.9em}
+button.danger{background:#dc3545}
 #btnProses{background:#28a745}
-#chat{height:220px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fafafa}
-.msg{padding:6px 10px;border-radius:8px;margin:4px 0;max-width:80%;word-wrap:break-word}
+#chat{height:250px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fafafa}
+.msg{padding:6px 10px;border-radius:8px;margin:4px 0;max-width:85%;word-wrap:break-word}
 .me{background:#dcf8c6;margin-left:auto}
 .peer{background:#fff;border:1px solid #eee}
+.sys{text-align:center;font-size:.8em;color:#888;background:none;margin:2px 0}
+.peer-tag{font-size:.7em;color:#555;font-weight:bold}
+#peerList{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.peer-btn{padding:4px 8px;font-size:.8em;border-radius:20px;background:#eee;color:#333;border:1px solid #ccc}
+.peer-btn.active{background:#007bff;color:#fff}
 input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:.9em;display:none}
 </style>
 </head>
 <body>
 
-<h2>🌐 P2P Chat</h2>
-<div class="card"><div class="status" id="status">Status: Belum konek</div></div>
+<h2>🌐 P2P Multi Chat</h2>
+<div class="card"><div class="status" id="status">Status: Belum ada koneksi</div></div>
 
 <div class="card">
 <b>Kode Offer / Answer</b>
-<textarea id="code" placeholder="1. Klik Buat untuk hasilkan Offer
+<textarea id="code" placeholder="1. Klik Buat Koneksi Baru
 2. Tempel kode teman lalu klik Proses"></textarea>
 <div class="row">
-<button id="btnBuat">🟢 Buat</button>
-<button id="btnProses">🔵 Proses</button>
+<button id="btnBuat">🟢 Buat Koneksi Baru</button>
+<button id="btnProses">🔵 Proses Kode</button>
 </div>
+</div>
+
+<div class="card">
+<b>Koneksi Aktif</b>
+<div id="peerList">Belum ada</div>
 </div>
 
 <div class="card">
 <b>Chat</b>
 <div id="chat"></div>
 <input id="msg" placeholder="Ketik pesan...">
-<button id="btnKirim" disabled>Kirim</button>
+<button id="btnKirim" disabled>Kirim ke yang aktif</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -50,64 +61,109 @@ const code = document.getElementById("code");
 const chat = document.getElementById("chat");
 const msg = document.getElementById("msg");
 const btnKirim = document.getElementById("btnKirim");
+const peerList = document.getElementById("peerList");
 
-let pc, dc;
+let peers = new Map(); // {id: {pc, dc}}
+let activePeerId = null;
 const config = {iceServers: [{urls: "stun:stun.l.google.com:19302"}]};
 
-function add(t, cls){const d=document.createElement("div");d.className="msg "+cls;d.textContent=t;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
+function add(t, cls){const d=document.createElement("div");d.className="msg "+cls;d.innerHTML=t;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",1500)}
 
-function setDC(){
-  dc.onopen=()=>{status.textContent="Status: Konek ✅";btnKirim.disabled=false;add("Konek P2P!","status")}
-  dc.onmessage=e=>add(e.data,"peer")
-  dc.onclose=()=>{status.textContent="Status: Putus ❌";btnKirim.disabled=true}
+function updatePeerList(){
+  peerList.innerHTML = "";
+  if(peers.size === 0){ peerList.innerHTML = "Belum ada"; return; }
+  peers.forEach((_, id)=>{
+    const btn = document.createElement("button");
+    btn.className = "peer-btn" + (id === activePeerId ? " active" : "");
+    btn.textContent = id;
+    btn.onclick = ()=>{ activePeerId = id; updatePeerList(); add(`Chat ke ${id}`,"sys")};
+    peerList.appendChild(btn);
+  });
+  btnKirim.disabled = activePeerId === null;
 }
 
-// 1. BUAT OFFER
-btnBuat.onclick=async()=>{
-  pc=new RTCPeerConnection(config);
-  dc=pc.createDataChannel("chat");
-  setDC();
-  pc.onicecandidate=()=>{if(pc.localDescription)code.value=JSON.stringify(pc.localDescription)};
-  const offer=await pc.createOffer();
+function setupPeer(id){
+  const {pc, dc} = peers.get(id);
+  
+  dc.onopen = () => {
+    if(activePeerId === null) activePeerId = id; // set pertama jadi aktif
+    updatePeerList();
+    add(`<span class="peer-tag">${id}</span> Konek ✅`,"sys");
+  }
+  dc.onmessage = e => add(`<span class="peer-tag">${id}</span> ${e.data}`,"peer")
+  dc.onclose = () => {
+    add(`<span class="peer-tag">${id}</span> Putus ❌`,"sys");
+    peers.delete(id);
+    if(activePeerId === id) activePeerId = [...peers.keys()][0] || null;
+    updatePeerList();
+  }
+  pc.onicecandidate = e => {
+    if(!e.candidate){
+      code.value = JSON.stringify({id, sdp: pc.localDescription});
+      navigator.clipboard.writeText(code.value);
+      toast(`Kode ${id} disalin`);
+      add(`<span class="peer-tag">${id}</span> Kirim kode ini ke teman`,"sys");
+    }
+  }
+}
+
+// 1. BUAT KONEKSI BARU
+btnBuat.onclick = async () => {
+  const peerId = 'Peer' + (peers.size + 1);
+  const pc = new RTCPeerConnection(config);
+  const dc = pc.createDataChannel("chat");
+  
+  peers.set(peerId, {pc, dc});
+  setupPeer(peerId);
+  
+  const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  code.select(); navigator.clipboard.writeText(code.value); // auto copy
-  toast("Offer disalin");
-  add("Kirim kode ini ke teman","status");
+  add(`<span class="peer-tag">${peerId}</span> Membuat Offer...`,"sys");
 }
 
-// 2. PROSES: OFFER JADI ANSWER, ANSWER JADI KONEK
-btnProses.onclick=async()=>{
+// 2. PROSES KODE DARI TEMAN
+btnProses.onclick = async () => {
   try{
-    const remote=JSON.parse(code.value);
-    if(!pc) pc=new RTCPeerConnection(config);
+    const remote = JSON.parse(code.value);
+    const {id, sdp} = remote;
     
-    if(remote.type==="offer"){ // kita jadi answerer
-      pc.ondatachannel=e=>{dc=e.channel;setDC()}
-      pc.onicecandidate=()=>{if(pc.localDescription)code.value=JSON.stringify(pc.localDescription)};
-      await pc.setRemoteDescription(remote);
-      const ans=await pc.createAnswer();
+    if(!peers.has(id)){ // kalau belum ada, berarti kita jadi answerer
+      const pc = new RTCPeerConnection(config);
+      peers.set(id, {pc, dc: null});
+      pc.ondatachannel = e => { peers.get(id).dc = e.channel; setupPeer(id) };
+      setupPeer(id);
+    }
+    
+    const {pc} = peers.get(id);
+    
+    if(sdp.type === "offer"){
+      await pc.setRemoteDescription(sdp);
+      const ans = await pc.createAnswer();
       await pc.setLocalDescription(ans);
-      code.select(); navigator.clipboard.writeText(code.value); // auto copy
-      toast("Answer disalin");
-      add("Kirim Answer ini ke teman","status");
+      add(`<span class="peer-tag">${id}</span> Membuat Answer...`,"sys");
     }
     
-    if(remote.type==="answer"){ // kita terima answer
-      await pc.setRemoteDescription(remote);
+    if(sdp.type === "answer"){
+      await pc.setRemoteDescription(sdp);
+      add(`<span class="peer-tag">${id}</span> Memproses Answer...`,"sys");
     }
-  }catch{add("Kode salah!","status")}
+  }catch(e){
+    add("Kode salah: " + e.message,"sys")
+  }
 }
 
-// KIRIM CHAT
-btnKirim.onclick=()=>{
-  if(msg.value && dc.readyState==="open"){
+// 3. KIRIM CHAT KE YANG AKTIF
+btnKirim.onclick = () => {
+  if(!activePeerId) return toast("Pilih koneksi dulu");
+  const {dc} = peers.get(activePeerId);
+  if(dc && dc.readyState==="open" && msg.value){
     dc.send(msg.value);
-    add(msg.value,"me");
+    add(`<span class="peer-tag">Ke ${activePeerId}</span> ${msg.value}`,"me");
     msg.value="";
   }
 }
-msg.onkeypress=e=>{if(e.key==="Enter")btnKirim.click()}
+msg.onkeypress = e => {if(e.key === "Enter") btnKirim.click()}
 </script>
 </body>
 </html>
