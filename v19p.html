@@ -10,7 +10,9 @@ body{font-family:Arial,sans-serif;background:#f3f3f3;max-width:600px;margin:auto
 input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccc;border-radius:8px;margin:10px 0}
 .row{display:flex;gap:10px}
 button{flex:1;padding:10px 14px;border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:bold}
+button:disabled{opacity:0.5}
 #pasteBtn{background:#007bff}#saveBtn{background:#28a745}#clearBtn{background:#dc3545}
+#loadBtn{background:#17a2b8;width:100%;margin:10px 0} /* tombol baru */
 .item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #eee}
 .item-text{flex:1;word-break:break-word;padding-right:10px}.item-time{font-size:.8em;color:#888;display:block}
 .empty{text-align:center;color:#888}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;display:none}
@@ -26,22 +28,31 @@ button{flex:1;padding:10px 14px;border:none;border-radius:8px;cursor:pointer;col
 <button id="saveBtn">💾 Simpan</button>
 </div>
 </div>
+
 <div class="card">
 <b>Data di DB</b>
-<div id="list" class="empty">Memuat...</div>
+<button id="loadBtn">📥 Ambil Data</button> <!-- 1. TOMBOL BARU -->
+<div id="list" class="empty">Tekan tombol "Ambil Data"</div> <!-- 2. TEXT BARU -->
 </div>
+
 <div class="card">
 <button id="clearBtn">🗑 Hapus semua data</button>
 </div>
 <div class="toast" id="toast"></div>
+
 <script>
 const GAS="https://script.google.com/macros/s/AKfycbzIHG5X4pf8CkHVJq3hWas0p6NdYQPd_Hf9uJXhmgd2FkMJxOCm2HIsaW0hafu7q0OmrA/exec";
+
 async function api(action,data={}){
  await fetch(GAS,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,...data})});
  return {success:true};
 }
+
 async function load(){
+ document.getElementById("list").innerHTML = "Memuat...";
+ loadBtn.disabled = true; // biar ga spam klik
  const r=await fetch(GAS,{method:"POST",body:JSON.stringify({action:"list"})});
+ loadBtn.disabled = false;
  const data=await r.json();
  const box=document.getElementById("list");
  if(!data.success){box.innerHTML="Gagal memuat";return;}
@@ -54,12 +65,38 @@ async function load(){
   box.appendChild(div);
  });
 }
+
 pasteBtn.onclick=async()=>{try{text.value=await navigator.clipboard.readText();toast("Berhasil paste");}catch(e){alert("Clipboard tidak diizinkan");}};
-saveBtn.onclick=async()=>{const txt=text.value.trim();if(!txt)return toast("Input kosong");await api("save",{text:txt});text.value="";toast("Tersimpan");load();};
-clearBtn.onclick=async()=>{if(!confirm("Hapus semua data?"))return;await api("clear");toast("Data dihapus");load();};
+
+// 3. TIDAK RELOAD SETELAH SIMPAN
+saveBtn.onclick=async()=>{
+ const txt=text.value.trim();
+ if(!txt)return toast("Input kosong");
+ saveBtn.disabled=true;
+ await api("save",{text:txt});
+ saveBtn.disabled=false;
+ text.value="";
+ toast("Tersimpan");
+};
+
+// 4. TIDAK RELOAD SETELAH HAPUS
+clearBtn.onclick=async()=>{
+ if(!confirm("Hapus semua data?"))return;
+ clearBtn.disabled=true;
+ await api("clear");
+ clearBtn.disabled=false;
+ document.getElementById("list").innerHTML = '<div class="empty">Tekan tombol "Ambil Data"</div>';
+ toast("Data dihapus");
+};
+
+// 2. HUBUNGKAN TOMBOL BARU
+loadBtn.onclick = load;
+
 function formatTime(i){try{return new Date(i).toLocaleString("id-ID")}catch(e){return i}}
 function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
-function toast(m){toastEl=document.getElementById("toast");toastEl.textContent=m;toastEl.style.display="block";setTimeout(()=>toastEl.style.display="none",1500)}
-load();
+function toast(m){const toastEl=document.getElementById("toast");toastEl.textContent=m;toastEl.style.display="block";setTimeout(()=>toastEl.style.display="none",1500)}
+
+// 5. HAPUS PEMANGGILAN OTOMATIS
+// load(); <- dihapus
 </script>
 </body></html>
