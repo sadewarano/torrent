@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>P2P Chat Mesh</title>
+<title>P2P Chat Relay v3</title>
 <style>
 body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:600px;margin:auto}
 .card{background:#fff;padding:16px;border-radius:12px;margin:10px 0;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
@@ -26,7 +26,7 @@ button:disabled{background:#aaa}
 </head>
 <body>
 
-<h2>🌐 P2P Chat Mesh v2</h2>
+<h2>🌐 P2P Chat Relay v3</h2>
 
 <div class="card">
   <b class="status" id="status">Status: Belum Konek</b>
@@ -67,12 +67,22 @@ const chatBox = document.getElementById("chatBox");
 const msgInput = document.getElementById("msgInput");
 const btnSend = document.getElementById("btnSend");
 
-const myId = "peer_" + Math.random().toString(36).substr(2, 5); // ID unik buat device ini
+const myId = "peer_" + crypto.randomUUID().split('-')[0]; // FIX 4
 myIdEl.textContent = myId;
 
 let peers = {}; // {peerId: {pc, dc, isActive}}
-let pendingOffers = {}; // FIX 1: {offerId: peerId} buat mapping answer
-let seenMessages = new Set(); // FIX 2: Anti loop
+let pendingOffers = {}; // {offerId: peerId}
+
+// FIX 2: LRU SEENMESSAGES. Maks 1000 ID
+let seenMessages = new Set();
+const MAX_SEEN = 1000;
+function addSeen(id){
+  seenMessages.add(id);
+  if(seenMessages.size > MAX_SEEN){
+    const first = seenMessages.values().next().value;
+    seenMessages.delete(first);
+  }
+}
 
 const config = {iceServers: [{ urls: "stun:stun.l.google.com:19302" }]};
 
@@ -101,54 +111,64 @@ function copyCode(id){
   navigator.clipboard.writeText(el.value); toast("Tersalin!");
 }
 
-// FIX 2 & 3: BROADCAST DENGAN ID DAN FROM
+// FIX 1: BROADCAST DENGAN CEK readyState
 function broadcast(payload, excludePeerId = null){
-  if(seenMessages.has(payload.id)) return; // udah pernah liat, skip
-  seenMessages.add(payload.id);
+  if(seenMessages.has(payload.id)) return;
+  addSeen(payload.id); // FIX 2
 
   for(let id in peers){
-    if(id!== excludePeerId && peers[id].isActive){
-      peers[id].dc.send(JSON.stringify(payload));
+    const p = peers[id];
+    if(
+      id!== excludePeerId &&
+      p.dc &&
+      p.dc.readyState === "open" // FIX 1
+    ){
+      try{
+        p.dc.send(JSON.stringify(payload));
+      }catch(e){
+        console.error("Gagal kirim ke", id, e);
+      }
     }
   }
 }
 
 function setupDataChannel(dc, peerId){
   dc.onopen = () => {
-    peers[peerId].isActive = true; // FIX 4: baru aktif kalau open
+    peers[peerId].isActive = true;
     addMsg(`Konek ke ${peerId} ✅`, "status");
     updatePeerList();
   };
   dc.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    
-    if(seenMessages.has(msg.id)) return; // FIX 2: ANTI LOOP
-    seenMessages.add(msg.id);
+    let msg;
+    try{ msg = JSON.parse(e.data); }catch{return;}
+
+    if(seenMessages.has(msg.id)) return; // FIX 3: Udah liat, skip. Ga tampil 2x
+    addSeen(msg.id);
 
     // TAMPILKAN
     if(msg.from === myId){
-      addMsg(`Kamu: ${msg.text}`, "me");
+      // Pesan kita balik lagi dari relay. Skip tampil
     }else{
       addMsg(`Dari ${msg.from}: ${msg.text}`, "peer");
       addMsg(`Relay dari ${msg.from}`, "relay");
     }
 
     // TERUSKAN
-    broadcast(msg, peerId); // kirim ke semua kecuali yg ngirim
+    broadcast(msg, peerId);
   };
   dc.onclose = () => {
     addMsg(`Putus dari ${peerId} ❌`, "status");
-    peers[peerId].isActive = false;
+    if(peers[peerId]) peers[peerId].isActive = false;
     updatePeerList();
   };
 }
 
 document.getElementById("btnOffer").onclick = async () => {
-  const newPeerId = "peer_" + Math.random().toString(36).substr(2, 5);
-  const offerId = "offer_" + Date.now(); // FIX 5: ID buat offer ini
-  
+  const newPeerId = "peer_" + crypto.randomUUID().split('-')[0]; // FIX 4
+  const offerId = "offer_" + crypto.randomUUID(); // FIX 4
+
   peers[newPeerId] = {pc: new RTCPeerConnection(config), isActive: false};
-  pendingOffers[offerId] = newPeerId; // FIX 1: Simpan mapping
+  pendingOffers[offerId] = newPeerId;
 
   const peer = peers[newPeerId];
   peer.dc = peer.pc.createDataChannel("chat");
@@ -156,7 +176,6 @@ document.getElementById("btnOffer").onclick = async () => {
 
   peer.pc.onicecandidate = (e) => {
     if(peer.pc.localDescription){
-      // FIX 5: KIRIM OFFER + OFFERID
       localSDP.value = JSON.stringify({
         type: "offer",
         offerId: offerId,
@@ -176,7 +195,7 @@ document.getElementById("btnAnswer").onclick = async () => {
     const remoteDesc = signal.sdp;
 
     if(signal.type === "offer"){
-      const newPeerId = signal.from; // pakai ID pengirim sebagai ID peer
+      const newPeerId = signal.from;
       if(peers[newPeerId]) return addMsg("Sudah konek ke peer ini", "status");
 
       peers[newPeerId] = {pc: new RTCPeerConnection(config), isActive: false};
@@ -190,7 +209,7 @@ document.getElementById("btnAnswer").onclick = async () => {
         if(peer.pc.localDescription){
           localSDP.value = JSON.stringify({
             type: "answer",
-            offerId: signal.offerId, // FIX 1: Balas ke offerId yg sama
+            offerId: signal.offerId,
             from: myId,
             sdp: peer.pc.localDescription
           });
@@ -201,14 +220,13 @@ document.getElementById("btnAnswer").onclick = async () => {
       const answer = await peer.pc.createAnswer();
       await peer.pc.setLocalDescription(answer);
     }
-    
+
     if(signal.type === "answer"){
-      // FIX 1: CARI PEER BERDASARKAN OFFERID BUKAN LAST
-      const peerId = pendingOffers[signal.offerId];
-      if(!peerId) return addMsg("Offer ID tidak ditemukan", "status");
-      
+      const peerId = pendingOffers[signal.offerId]; // FIX 1 versi sebelumnya
+      if(!peerId) return addMsg("Offer ID tidak ditemukan/kadaluarsa", "status");
+
       await peers[peerId].pc.setRemoteDescription(remoteDesc);
-      delete pendingOffers[signal.offerId]; // udah kepake
+      delete pendingOffers[signal.offerId];
     }
   }catch(e){
     addMsg("Kode salah! Cek lagi: " + e.message, "status");
@@ -219,13 +237,14 @@ document.getElementById("btnAnswer").onclick = async () => {
 btnSend.onclick = () => {
   const text = msgInput.value;
   if(text){
-    const payload = { // FIX 3: FORMAT PESAN BARU
-      id: "msg_" + Date.now() + "_" + myId,
+    const payload = {
+      type: "chat", // FIX 6: kasih type
+      id: "msg_" + crypto.randomUUID(), // FIX 4
       from: myId,
       text: text
     };
+    addMsg(`Kamu: ${text}`, "me"); // tampil 1x di lokal
     broadcast(payload); // kirim ke semua
-    addMsg(`Kamu: ${text}`, "me");
     msgInput.value = "";
   }
 };
