@@ -2,132 +2,172 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>P2P Group Chat Mesh</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P2P Chat Cepat + Copy</title>
 <style>
-body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:700px;margin:auto}
-.card{background:#fff;padding:16px;border-radius:12px;margin:10px 0}
-textarea{width:100%;height:100px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace}
+body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:600px;margin:auto}
+.card{background:#fff;padding:16px;border-radius:12px;margin:10px 0;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+h2{margin:0 0 10px 0}
+textarea{width:100%;height:80px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:0.85em}
 input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
-button{padding:10px 16px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;margin:4px 0;cursor:pointer}
+.row{display:flex;gap:8px}
+button{flex:1;padding:12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;margin:6px 0;cursor:pointer}
+button.copy{background:#28a745}
+button:disabled{background:#aaa}
 #chatBox{height:250px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:8px;background:#fafafa}
-.peerTag{font-size:0.8em;color:#007bff;font-weight:bold}
+.msg{padding:6px 10px;border-radius:8px;margin:4px 0;max-width:80%;word-wrap:break-word}
+.me{background:#dcf8c6;margin-left:auto}
+.peer{background:#fff;border:1px solid #eee}
+.status{font-size:0.9em;color:#666;text-align:center}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:0.9em;display:none}
 </style>
 </head>
 <body>
 
-<h2>🌐 P2P Group Chat - Mesh 3+ Orang</h2>
+<h2>🌐 P2P Chat Cepat</h2>
 
 <div class="card">
-  <b>Nama Kamu:</b> <input id="myName" placeholder="Contoh: Bima">
-  <button onclick="start()">1. Mulai / Gabung Room</button>
+  <b class="status" id="status">Status: Belum Konek</b>
 </div>
 
 <div class="card">
-  <h3>2. Tukeran Kode</h3>
-  <p>Kode kamu. Copy kirim ke semua teman:</p>
-  <textarea id="myCode" readonly></textarea>
-  <p>Tempel kode teman di sini, 1 baris 1 orang:</p>
-  <textarea id="theirCode" placeholder='{"from":"Bima","sdp":{...}}'></textarea>
-  <button onclick="addPeer()">3. Tambah Peer</button>
+  <h3>Langkah 1: Buat Koneksi</h3>
+  <button id="btnOffer">1. Aku Yang Buat Offer</button>
+  <textarea id="localSDP" placeholder="Kode Offer/Answer muncul otomatis di sini" readonly></textarea>
+  <div class="row">
+    <button class="copy" onclick="copyCode('localSDP')">📋 Copy Kode</button>
+  </div>
 </div>
 
 <div class="card">
-  <h3>Chat Group</h3>
+  <h3>Langkah 2: Tempel Jawaban</h3>
+  <textarea id="remoteSDP" placeholder="Tempel kode dari teman di sini"></textarea>
+  <button id="btnAnswer">2. Set Remote & Konek</button>
+</div>
+
+<div class="card">
+  <h3>Chat</h3>
   <div id="chatBox"></div>
-  <input id="msgInput" placeholder="Ketik pesan ke semua...">
-  <button onclick="broadcast()">Kirim ke Semua</button>
+  <input id="msgInput" placeholder="Ketik pesan...">
+  <button id="btnSend" disabled>Kirim</button>
 </div>
+
+<div class="toast" id="toast">Tersalin!</div>
 
 <script>
-const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-let myName = "";
-let pcList = {}; // {nama: {pc, dc}}
-let myOffers = {}; // simpan offer kita
+const status = document.getElementById("status");
+const localSDP = document.getElementById("localSDP");
+const remoteSDP = document.getElementById("remoteSDP");
+const chatBox = document.getElementById("chatBox");
+const msgInput = document.getElementById("msgInput");
+const btnSend = document.getElementById("btnSend");
 
-function log(msg, from="System"){
+let pc; 
+let dc; 
+
+const config = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" }
+  ]
+};
+
+function addMsg(text, who){
   const div = document.createElement("div");
-  div.innerHTML = `<span class="peerTag">${from}:</span> ${msg}`;
-  document.getElementById("chatBox").appendChild(div);
+  div.className = "msg " + who;
+  div.textContent = text;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-function start(){
-  myName = document.getElementById("myName").value || "Anon";
-  log("Kamu join sebagai " + myName);
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  setTimeout(()=>t.style.display="none", 1500);
 }
 
-// BUAT OFFER UNTUK 1 ORANG
-async function makeOffer(peerName){
-  const pc = new RTCPeerConnection(config);
-  const dc = pc.createDataChannel("chat");
-
-  setupDC(peerName, dc);
-  pcList[peerName] = {pc, dc};
-
-  pc.onicecandidate = (e) => {
-    if(e.candidate == null){
-      myOffers[peerName] = JSON.stringify({from:myName, sdp:pc.localDescription});
-      document.getElementById("myCode").value = JSON.stringify(myOffers);
-    }
-  };
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+function copyCode(id){
+  const el = document.getElementById(id);
+  el.select();
+  navigator.clipboard.writeText(el.value);
+  toast("Tersalin!");
 }
 
-// TERIMA KODE TEMAN
-async function addPeer(){
-  const codes = document.getElementById("theirCode").value.split('\n').filter(Boolean);
-  for(const codeStr of codes){
-    const data = JSON.parse(codeStr);
-    const peerName = data.from;
-    const remoteSDP = data.sdp;
-
-    if(pcList[peerName]) continue; // udah ada
-
-    const pc = new RTCPeerConnection(config);
-    pcList[peerName] = {pc, dc:null};
-
-    pc.ondatachannel = (e) => { // kita yg terima
-      setupDC(peerName, e.channel);
-      pcList[peerName].dc = e.channel;
-    };
-    pc.onicecandidate = (e) => {
-      if(e.candidate == null){
-        const answer = JSON.stringify({from:myName, sdp:pc.localDescription});
-        log(`Copy Answer ini dan kirim ke ${peerName}: ${answer}`);
-      }
-    };
-
-    if(remoteSDP.type === "offer"){
-      await pc.setRemoteDescription(remoteSDP);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-    }
-    if(remoteSDP.type === "answer"){
-      await pc.setRemoteDescription(remoteSDP);
-    }
+// FIX: Update tiap ada candidate baru biar ga nunggu lama
+function updateSDP(){
+  if(pc && pc.localDescription){
+    localSDP.value = JSON.stringify(pc.localDescription);
   }
 }
 
-function setupDC(peerName, dc){
-  dc.onopen = () => log("Konek ke " + peerName + " ✅");
+function setupDataChannel(){
+  dc.onopen = () => {
+    status.textContent = "Status: Konek ✅";
+    btnSend.disabled = false;
+    addMsg("Konek P2P berhasil!", "status");
+  };
   dc.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    log(msg.text, msg.from);
+    addMsg(e.data, "peer");
+  };
+  dc.onclose = () => {
+    status.textContent = "Status: Putus ❌";
+    btnSend.disabled = true;
   };
 }
 
-// KIRIM KE SEMUA
-function broadcast(){
-  const msg = document.getElementById("msgInput").value;
-  if(!msg) return;
-  log(msg, myName);
-  Object.values(pcList).forEach(p=>{
-    if(p.dc && p.dc.readyState === "open"){
-      p.dc.send(JSON.stringify({from:myName, text:msg}));
+document.getElementById("btnOffer").onclick = async () => {
+  pc = new RTCPeerConnection(config);
+  dc = pc.createDataChannel("chat");
+  setupDataChannel();
+
+  pc.onicecandidate = (e) => {
+    updateSDP(); // update terus
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  updateSDP();
+  addMsg("Copy kode di atas, kirim ke teman", "status");
+};
+
+document.getElementById("btnAnswer").onclick = async () => {
+  try{
+    const remoteDesc = JSON.parse(remoteSDP.value);
+    if(!pc) pc = new RTCPeerConnection(config);
+
+    if(remoteDesc.type === "offer"){
+      pc.ondatachannel = (e) => { 
+        dc = e.channel;
+        setupDataChannel();
+      };
+      pc.onicecandidate = (e) => { updateSDP(); };
+
+      await pc.setRemoteDescription(remoteDesc);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      updateSDP();
+      addMsg("Copy Answer di atas, kirim balik ke teman", "status");
     }
-  });
-  document.getElementById("msgInput").value = "";
-}
+    
+    if(remoteDesc.type === "answer"){
+      await pc.setRemoteDescription(remoteDesc);
+    }
+  }catch(e){
+    addMsg("Kode salah! Cek lagi", "status");
+  }
+};
+
+btnSend.onclick = () => {
+  const msg = msgInput.value;
+  if(msg && dc && dc.readyState === "open"){
+    dc.send(msg);
+    addMsg(msg, "me");
+    msgInput.value = "";
+  }
+};
+msgInput.onkeypress = (e) => { if(e.key === "Enter") btnSend.onclick(); }
+
 </script>
 </body>
 </html>
