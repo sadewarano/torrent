@@ -3,224 +3,192 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebShare Seeder</title>
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<title>P2P Chat Relay</title>
 <style>
-:root{--primary:#6366f1; --success:#22c55e; --bg:#f1f5f9; --card:#fff; --text:#1e293b; --warning:#f59e0b;}
-*{box-sizing:border-box;font-family:'Poppins',system-ui}
-body{background:var(--bg);margin:0;padding:16px;color:var(--text)}
-.container{max-width:650px;margin:auto}
-header{text-align:center;margin-bottom:20px}
-header h1{margin:0;font-size:24px;color:var(--primary)}
-.card{background:var(--card);padding:16px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
-input[type=file]{width:100%;padding:12px;border:2px dashed #cbd5e1;border-radius:8px;background:#f8fafc;cursor:pointer}
-input[type=text]{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin:8px 0;font-size:14px}
-.btn{width:100%;padding:12px;border:none;border-radius:8px;font-weight:600;font-size:15px;cursor:pointer;margin-top:8px}
-.btn-primary{background:var(--primary);color:#fff}
-.btn-warning{background:var(--warning);color:#fff}
-.btn:disabled{background:#94a3b8}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.stat{padding:12px;background:#f8fafc;border-radius:8px;text-align:center}
-.stat-value{font-size:20px;font-weight:600;color:var(--primary)}
-.stat-label{font-size:12px;color:#64748b}
-.info{padding:12px;background:#eff6ff;border-left:4px solid var(--primary);border-radius:6px;font-size:14px;margin:10px 0}
-.peer-card{border:1px solid #e2e8f0;padding:12px;border-radius:10px;margin-bottom:10px}
-.peer-header{display:flex;justify-content:space-between;font-weight:600;font-size:14px}
-.peer-progress-bar{width:100%;height:8px;background:#e2e8f0;border-radius:10px;overflow:hidden;margin:6px 0}
-.peer-progress-fill{height:100%;background:var(--success);transition:.3s}
-.peer-stats{display:flex;justify-content:space-between;font-size:12px;color:#64748b}
-.badge{display:inline-block;font-size:11px;background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;margin-left:6px}
+body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:600px;margin:auto}
+.card{background:#fff;padding:16px;border-radius:12px;margin:10px 0;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+h2{margin:0 0 10px 0}
+textarea{width:100%;height:80px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:0.85em}
+input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
+.row{display:flex;gap:8px}
+button{flex:1;padding:12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;margin:6px 0;cursor:pointer}
+button.copy{background:#28a745}
+button:disabled{background:#aaa}
+#chatBox{height:250px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:8px;background:#fafafa}
+.msg{padding:6px 10px;border-radius:8px;margin:4px 0;max-width:80%;word-wrap:break-word}
+.me{background:#dcf8c6;margin-left:auto}
+.peer{background:#fff;border:1px solid #eee}
+.relay{background:#ffeeba;border:1px solid #ffc107} /* pesan relay */
+.status{font-size:0.9em;color:#666;text-align:center}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:0.9em;display:none}
+.peerList{font-size:0.8em;color:#555}
 </style>
 </head>
 <body>
-<div class="container">
-<header>
-  <h1>🌱 WebShare Seeder</h1>
-  <p>Share file langsung dari browser kamu</p>
-</header>
+
+<h2>🌐 P2P Chat Relay</h2>
 
 <div class="card">
-  <h3>1. Pilih File</h3>
-  <input type="file" id="fileInput">
-  <div class="info">⚠️ Jangan tutup halaman ini saat seeding. Auto-sebar aktif</div>
+  <b class="status" id="status">Status: Belum Konek</b>
+  <div class="peerList" id="peerList">Teman: 0</div>
 </div>
 
-<div id="seedPanel" style="display:none">
-  <div class="card">
-    <h3>2. Magnet Link</h3>
-    <input type="text" id="magnet" readonly>
-    <button class="btn btn-primary" id="copyBtn" onclick="copyMagnet()">📋 Salin Magnet</button>
-    <button class="btn btn-warning" id="forceBtn" onclick="forceAnnounce()">⚡ Force Sebar Sekarang</button>
-  </div>
-
-  <div class="card">
-    <h3>📊 Statistik Seeding <span id="autoBadge" class="badge">AUTO-SEBAR ON</span></h3>
-    <div class="grid">
-      <div class="stat">
-        <div class="stat-value" id="fileSize">0 MB</div>
-        <div class="stat-label">Ukuran File</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value" id="peerCount">0</div>
-        <div class="stat-label">Peer Aktif</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value" id="uploaded">0 MB</div>
-        <div class="stat-label">Terupload</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value" id="upSpeed">0 KB/s</div>
-        <div class="stat-label">Kecepatan</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>👥 Daftar Peer</h3>
-    <div id="peerList"><div class=info>Menunggu peer connect...</div></div>
+<div class="card">
+  <h3>Langkah 1: Buat Koneksi Baru</h3>
+  <button id="btnOffer">1. Buat Offer Ke Teman Baru</button>
+  <textarea id="localSDP" placeholder="Kode Offer/Answer muncul otomatis di sini" readonly></textarea>
+  <div class="row">
+    <button class="copy" onclick="copyCode('localSDP')">📋 Copy Kode</button>
   </div>
 </div>
 
-<div id="info" class="info">Silakan pilih file untuk memulai</div>
-
+<div class="card">
+  <h3>Langkah 2: Tempel Jawaban</h3>
+  <textarea id="remoteSDP" placeholder="Tempel kode dari teman di sini"></textarea>
+  <button id="btnAnswer">2. Set Remote & Konek</button>
 </div>
+
+<div class="card">
+  <h3>Chat</h3>
+  <div id="chatBox"></div>
+  <input id="msgInput" placeholder="Ketik pesan...">
+  <button id="btnSend" disabled>Kirim</button>
+</div>
+
+<div class="toast" id="toast">Tersalin!</div>
+
 <script>
-const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSEm2HGGk0EpL2krYTmKkz6ky1_WoBsVcw3F3YxJoBg/exec";
-const TRACKERS = [
-  "wss://tracker.openwebtorrent.com",
-  "wss://tracker.btorrent.xyz",
-  "wss://tracker.webtorrent.dev",
-  "wss://tracker.fastcast.nz"
-];
-const AUTO_FORCE_INTERVAL = 5000; // 5 detik
+const status = document.getElementById("status");
+const peerList = document.getElementById("peerList");
+const localSDP = document.getElementById("localSDP");
+const remoteSDP = document.getElementById("remoteSDP");
+const chatBox = document.getElementById("chatBox");
+const msgInput = document.getElementById("msgInput");
+const btnSend = document.getElementById("btnSend");
 
-const client=new WebTorrent();
-let currentTorrent=null;
-let lastUploaded = 0;
-let lastTime = Date.now();
-let autoForceInterval = null;
+let peers = {}; // SIMPAN BANYAK PEER {id: {pc, dc}}
+let peerIdCounter = 0;
+let currentLocalPeerId = null; // untuk tau offer ini buat siapa
 
-const fileInput = document.getElementById('fileInput');
-const magnet = document.getElementById('magnet');
-const copyBtn = document.getElementById('copyBtn');
-const seedPanel = document.getElementById('seedPanel');
+const config = {iceServers: [{ urls: "stun:stun.l.google.com:19302" }]};
 
-function log(t){document.getElementById('info').textContent=t}
-function formatBytes(b){if(b===0)return '0 B'; const k=1024; const sizes=['B','KB','MB','GB']; const i=Math.floor(Math.log(b)/Math.log(k)); return parseFloat((b/Math.pow(k,i)).toFixed(2))+' '+sizes[i];}
-function buildMagnet(h){let m='magnet:?xt=urn:btih:'+h; TRACKERS.forEach(tr=>m+="&tr="+encodeURIComponent(tr)); return m;}
-
-// SEED
-fileInput.onchange=async()=>{
- let f=fileInput.files[0]; if(!f)return;
- if(currentTorrent)currentTorrent.destroy();
- clearInterval(autoForceInterval);
- lastUploaded = 0;
- seedPanel.style.display = 'block';
-
- log("🌱 Membuat torrent...");
-
- client.seed(f, {announce: TRACKERS}, async t=>{ // PENTING: langsung kasih 4 tracker
-   currentTorrent=t;
-   const mag = buildMagnet(t.infoHash); // pakai 4 tracker
-   magnet.value = mag;
-   document.getElementById('fileSize').textContent = formatBytes(t.length);
-   await shareMagnet(mag);
-   log("✅ Magnet siap + Auto Sebar aktif. Bagikan ke teman");
-
-   // LANGSUNG AUTO FORCE SAAT GENERATE
-   startAutoForce();
-
-   // UPDATE STATS
-   t.on("upload",()=>{
-      document.getElementById('uploaded').textContent = formatBytes(t.uploaded);
-      const now = Date.now();
-      const diff = t.uploaded - lastUploaded;
-      const timeDiff = (now - lastTime) / 1000;
-      if(timeDiff > 0){
-        document.getElementById('upSpeed').textContent = formatBytes(diff/timeDiff)+'/s';
-        lastUploaded = t.uploaded;
-        lastTime = now;
-      }
-   });
-
-   // UPDATE PEER LIST TIAP 1 DETIK
-   setInterval(updatePeerList, 1000);
- });
-};
-
-function startAutoForce(){
-  document.getElementById('autoBadge').textContent = "AUTO-SEBAR ON";
-  log("⚡ Auto Sebar: Broadcast ke tracker tiap 5 detik");
-  autoForceInterval = setInterval(()=>{
-    if(currentTorrent && currentTorrent.numPeers < 10){
-      currentTorrent.discover(); // paksa umumkan ke DHT + Tracker
-    }
-  }, AUTO_FORCE_INTERVAL);
-}
-
-function forceAnnounce(){
-  if(!currentTorrent) return;
-  log("⚡ Force Sebar Manual...");
-  currentTorrent.discover();
-  copyBtn.textContent = "✓ Disebar!";
-  setTimeout(()=>copyBtn.textContent="📋 Salin Magnet",1500);
+function addMsg(text, who){
+  const div = document.createElement("div");
+  div.className = "msg " + who;
+  div.textContent = text;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 function updatePeerList(){
-  if(!currentTorrent) return;
-  const peerList = document.getElementById('peerList');
-  const wires = currentTorrent.wires;
+  peerList.textContent = `Teman: ${Object.keys(peers).length}`;
+  status.textContent = Object.keys(peers).length > 0? `Status: Konek ke ${Object.keys(peers).length} teman ✅` : `Status: Belum Konek`;
+  btnSend.disabled = Object.keys(peers).length === 0;
+}
 
-  document.getElementById('peerCount').textContent = wires.length;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.display = "block";
+  setTimeout(()=>t.style.display="none", 1500);
+}
+function copyCode(id){
+  const el = document.getElementById(id); el.select();
+  navigator.clipboard.writeText(el.value); toast("Tersalin!");
+}
 
-  if(wires.length === 0){
-    peerList.innerHTML = '<div class=info>Menunggu peer connect... Auto-sebar berjalan</div>';
-    return;
+// FUNGSI BARU: KIRIM KE SEMUA KECUALI PENGIRIM
+function broadcast(msg, excludePeerId = null){
+  for(let id in peers){
+    if(id!== excludePeerId && peers[id].dc && peers[id].dc.readyState === "open"){
+      peers[id].dc.send(msg);
+    }
   }
-
-  peerList.innerHTML = '';
-  wires.forEach((wire, i)=>{
-    const peerProgress = Math.round(wire.peerProgress * 100);
-    const downloaded = Math.round(wire.peerProgress * currentTorrent.length);
-
-    peerList.innerHTML += `
-      <div class="peer-card">
-        <div class="peer-header">
-          <span>Peer #${i+1}</span>
-          <span>${peerProgress}%</span>
-        </div>
-        <div class="peer-progress-bar"><div class="peer-progress-fill" style="width:${peerProgress}%"></div></div>
-        <div class="peer-stats">
-          <span>ID: ${wire.peerId? wire.peerId.toString('hex').slice(0,8) : 'wss'}</span>
-          <span>Didownload: ${formatBytes(downloaded)}</span>
-        </div>
-      </div>
-    `;
-  });
 }
 
-function copyMagnet(){
-  navigator.clipboard.writeText(magnet.value);
-  copyBtn.textContent="✓ Disalin";
-  setTimeout(()=>copyBtn.textContent="📋 Salin Magnet",2000);
+function setupDataChannel(dc, peerId){
+  dc.onopen = () => {
+    addMsg(`Konek ke Teman ${peerId} ✅`, "status");
+    updatePeerList();
+  };
+  dc.onmessage = (e) => {
+    // 1. TAMPILKAN PESAN
+    addMsg(`Dari ${peerId}: ${e.data}`, "peer");
+
+    // 2. RELAY: TERUSKAN KE TEMAN LAIN
+    broadcast(e.data, peerId); // kirim ke semua kecuali yg ngirim
+    addMsg(`Relay ke teman lain: ${e.data}`, "relay");
+  };
+  dc.onclose = () => {
+    addMsg(`Putus dari Teman ${peerId} ❌`, "status");
+    delete peers[peerId];
+    updatePeerList();
+  };
 }
 
-// GAS
-async function shareMagnet(mag){
+document.getElementById("btnOffer").onclick = async () => {
+  currentLocalPeerId = "peer" + (++peerIdCounter);
+  const peer = {pc: new RTCPeerConnection(config)};
+  peers[currentLocalPeerId] = peer;
+
+  peer.dc = peer.pc.createDataChannel("chat");
+  setupDataChannel(peer.dc, currentLocalPeerId);
+
+  peer.pc.onicecandidate = (e) => {
+    if(peer.pc.localDescription){
+      localSDP.value = JSON.stringify(peer.pc.localDescription);
+    }
+  };
+
+  const offer = await peer.pc.createOffer();
+  await peer.pc.setLocalDescription(offer);
+  localSDP.value = JSON.stringify(peer.pc.localDescription);
+  addMsg(`Buat Offer untuk Teman ${currentLocalPeerId}. Copy dan kirim`, "status");
+};
+
+document.getElementById("btnAnswer").onclick = async () => {
   try{
-    const res=await fetch(API+"?t="+Date.now());
-    const data=await res.json();
-    let kode = Array.isArray(data) && data.length? data[data.length-1].kode || "" : data.kode || "";
-    let arr=kode?kode.split(","):[];
-    arr=arr.filter(v=>v.trim()!=mag);
-    arr.unshift(mag); arr=arr.slice(0,10);
-    await fetch(API,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({kode:arr.join(",")})});
-  }catch(e){}
-}
-//
-// Stop auto force saat close tab
-window.onbeforeunload = () => clearInterval(autoForceInterval);
+    const remoteDesc = JSON.parse(remoteSDP.value);
+    const newPeerId = "peer" + (++peerIdCounter);
+    const peer = {pc: new RTCPeerConnection(config)};
+    peers[newPeerId] = peer;
+
+    if(remoteDesc.type === "offer"){
+      peer.pc.ondatachannel = (e) => {
+        peer.dc = e.channel;
+        setupDataChannel(peer.dc, newPeerId);
+      };
+      peer.pc.onicecandidate = (e) => {
+        if(peer.pc.localDescription) localSDP.value = JSON.stringify(peer.pc.localDescription);
+      };
+
+      await peer.pc.setRemoteDescription(remoteDesc);
+      const answer = await peer.pc.createAnswer();
+      await peer.pc.setLocalDescription(answer);
+      localSDP.value = JSON.stringify(peer.pc.localDescription);
+      addMsg(`Buat Answer untuk Teman ${newPeerId}. Copy dan kirim balik`, "status");
+    }
+
+    if(remoteDesc.type === "answer"){
+      // cari peer yg lagi nunggu answer. Paling simpel: ambil yg terakhir
+      const lastPeerId = Object.keys(peers).pop();
+      await peers[lastPeerId].pc.setRemoteDescription(remoteDesc);
+    }
+  }catch(e){
+    addMsg("Kode salah! Cek lagi: " + e.message, "status");
+  }
+  remoteSDP.value = "";
+};
+
+btnSend.onclick = () => {
+  const msg = msgInput.value;
+  if(msg){
+    broadcast(msg); // KIRIM KE SEMUA TEMAN
+    addMsg(`Kamu: ${msg}`, "me");
+    msgInput.value = "";
+  }
+};
+msgInput.onkeypress = (e) => { if(e.key === "Enter") btnSend.onclick(); }
+
 </script>
 </body>
 </html>
