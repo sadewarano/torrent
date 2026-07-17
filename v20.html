@@ -3,57 +3,48 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>P2P Multi Chat Fix</title>
+<title>P2P Chat Simple</title>
 <style>
-body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:600px;margin:auto}
+body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:500px;margin:auto}
 .card{background:#fff;padding:14px;border-radius:12px;margin:10px 0;box-shadow:0 2px 6px rgba(0,0,0,0.1)}
 .status{text-align:center;color:#666;font-size:.9em}
-textarea{width:100%;height:100px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:.8em}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-button{flex:1;padding:10px 12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;cursor:pointer;font-size:.9em}
-button.danger{background:#dc3545}
+textarea{width:100%;height:120px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:.8em}
+.row{display:flex;gap:8px}
+button{flex:1;padding:12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;cursor:pointer}
+button:disabled{background:#aaa}
 #btnProses{background:#28a745}
-#chat{height:250px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fafafa}
-.msg{padding:6px 10px;border-radius:8px;margin:4px 0;max-width:85%;word-wrap:break-word}
+#chat{height:220px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fafafa}
+.msg{padding:6px 10px;border-radius:8px;margin:4px 0;max-width:80%}
 .me{background:#dcf8c6;margin-left:auto}
 .peer{background:#fff;border:1px solid #eee}
-.sys{text-align:center;font-size:.8em;color:#888;background:none;margin:2px 0}
-.peer-tag{font-size:.7em;color:#555;font-weight:bold}
-#peerList{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-.peer-btn{padding:4px 10px;font-size:.8em;border-radius:20px;background:#eee;color:#333;border:1px solid #ccc;cursor:pointer}
-.peer-btn.active{background:#007bff;color:#fff;border-color:#007bff}
+.sys{text-align:center;font-size:.8em;color:#888}
 input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:.9em;display:none}
+.spinner{border:3px solid #f3f3f3;border-top:3px solid #007bff;border-radius:50%;width:16px;height:16px;animation:spin 1s linear infinite;display:inline-block;margin-right:6px}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 
-<h2>🌐 P2P Multi Chat</h2>
-<div class="card"><div class="status" id="status">Status: Belum ada koneksi</div></div>
+<h2>🌐 P2P Chat Simple</h2>
+<div class="card"><div class="status" id="status">Status: Belum konek</div></div>
 
 <div class="card">
 <b>Kode Offer / Answer</b>
-<textarea id="code" placeholder='{"id":"xxx", "sdp":{...}}'></textarea>
+<textarea id="code" placeholder="1. Klik Buat 
+2. Tunggu 'Siap' lalu kirim ke teman
+3. Tempel balasan lalu Proses"></textarea>
 <div class="row">
-<button id="btnBuat">🟢 Buat Koneksi Baru</button>
-<button id="btnProses">🔵 Proses Kode</button>
-<button id="btnHapus" class="danger">🗑️ Hapus Aktif</button>
+<button id="btnBuat">🟢 Buat</button>
+<button id="btnProses">🔵 Proses</button>
 </div>
-</div>
-
-<div class="card">
-<b>Koneksi Aktif</b>
-<div id="peerList">Belum ada</div>
 </div>
 
 <div class="card">
 <b>Chat</b>
 <div id="chat"></div>
 <input id="msg" placeholder="Ketik pesan...">
-<button id="btnKirim" disabled>Kirim ke yang aktif</button>
+<button id="btnKirim" disabled>Kirim</button>
 </div>
-
-<div class="toast" id="toast"></div>
 
 <script>
 const status = document.getElementById("status");
@@ -61,149 +52,83 @@ const code = document.getElementById("code");
 const chat = document.getElementById("chat");
 const msg = document.getElementById("msg");
 const btnKirim = document.getElementById("btnKirim");
-const peerList = document.getElementById("peerList");
 
-let peers = new Map(); // id: {pc, dc, state}
-let activePeerId = null;
-const config = {iceServers: [{urls: "stun:stun.l.google.com:19302"}]};
+let pc, dc;
+const config = {iceServers: [
+  {urls: "stun:stun.l.google.com:19302"},
+  {urls: "stun:stun1.l.google.com:19302"}
+]};
 
-function add(t, cls){const d=document.createElement("div");d.className="msg "+cls;d.innerHTML=t;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
-function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",1500)}
+function add(t, cls){const d=document.createElement("div");d.className="msg "+cls;d.textContent=t;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
 
-// FIX 2: ID unik
-function genId(){ return 'p_' + crypto.randomUUID().slice(0,8) }
-
-function updatePeerList(){
-  peerList.innerHTML = "";
-  if(peers.size === 0){
-    peerList.innerHTML = "Belum ada";
-    status.textContent = "Status: Belum ada koneksi";
-    btnKirim.disabled = true;
-    return;
-  }
-  peers.forEach((peer, id)=>{
-    const btn = document.createElement("button");
-    btn.className = "peer-btn" + (id === activePeerId? " active" : "");
-    btn.textContent = id + (peer.pc.connectionState === 'connected'? ' ✅' : '');
-    btn.onclick = ()=>{
-      activePeerId = id;
-      updatePeerList();
-      status.textContent = `Status: Chat ke ${id}`;
-      add(`Beralih chat ke <b>${id}</b>`,"sys")
-    };
-    peerList.appendChild(btn);
-  });
-  btnKirim.disabled =!activePeerId || peers.get(activePeerId).dc?.readyState!== 'open';
+function setDC(){
+  dc.onopen=()=>{status.textContent="Status: Konek ✅";btnKirim.disabled=false;add("Konek!","sys")}
+  dc.onmessage=e=>add(e.data,"peer")
+  dc.onclose=()=>{status.textContent="Status: Putus ❌";btnKirim.disabled=true}
 }
 
-// FIX 1 & 3: setupDC dipisah. Ambil dari Map langsung, jangan destruct
-function setupDC(id){
-  const peer = peers.get(id);
-  if(!peer ||!peer.dc) return;
-
-  peer.dc.onopen = () => {
-    if(activePeerId === null) activePeerId = id; // FIX 4: set otomatis
-    updatePeerList();
-    add(`<span class="peer-tag">${id}</span> Konek ✅`,"sys");
-  }
-  peer.dc.onmessage = e => add(`<span class="peer-tag">${id}</span> ${e.data}`,"peer")
-  peer.dc.onclose = () => {
-    add(`<span class="peer-tag">${id}</span> Putus ❌`,"sys");
-    peers.delete(id);
-    if(activePeerId === id){ // FIX 4: info pindah
-      activePeerId = [...peers.keys()][0] || null;
-      if(activePeerId) add(`Otomatis pindah chat ke <b>${activePeerId}</b>`,"sys")
+// BUAT OFFER - TUNGGU SAMPAI SELESAI
+btnBuat.onclick=async()=>{
+  if(pc){ add("Putuskan dulu","sys"); return; }
+  pc=new RTCPeerConnection(config);
+  dc=pc.createDataChannel("chat");
+  setDC();
+  
+  status.innerHTML = '<span class="spinner"></span>Mengumpulkan kandidat...';
+  btnBuat.disabled = true;
+  
+  pc.onicecandidate=e=>{
+    if(!e.candidate){ // baru copy kalau selesai
+      code.value=JSON.stringify(pc.localDescription);
+      navigator.clipboard.writeText(code.value);
+      status.textContent="Status: Offer siap. Sudah disalin";
+      btnBuat.disabled = false;
+      add("Kirim kode ini ke teman","sys");
     }
-    updatePeerList();
-  }
-}
-
-function setupPC(id){
-  const peer = peers.get(id);
-  peer.pc.onicecandidate = e => {
-    if(!e.candidate){
-      const payload = JSON.stringify({id, sdp: peer.pc.localDescription});
-      code.value = payload;
-      navigator.clipboard.writeText(payload);
-      toast(`Kode ${id} disalin`);
-      add(`<span class="peer-tag">${id}</span> Kirim kode ini ke teman`,"sys");
-    }
-  }
-  peer.pc.onconnectionstatechange = () => {
-    updatePeerList();
-    if(peer.pc.connectionState === "failed") add(`<span class="peer-tag">${id}</span> Gagal konek`,"sys");
-  }
-}
-
-// 1. BUAT KONEKSI BARU - KITA JADI OFFERER
-btnBuat.onclick = async () => {
-  const id = genId(); // FIX 2
-  const pc = new RTCPeerConnection(config);
-  const dc = pc.createDataChannel("chat");
-
-  peers.set(id, {pc, dc}); // simpan dc langsung
-  setupPC(id);
-  setupDC(id); // FIX 1: dc sudah ada, aman
-
-  const offer = await pc.createOffer();
+  };
+  
+  const offer=await pc.createOffer();
   await pc.setLocalDescription(offer);
-  add(`<span class="peer-tag">${id}</span> Membuat Offer...`,"sys");
-}
+};
 
-// 2. PROSES KODE - BISA JADI ANSWERER ATAU TERIMA ANSWER
-btnProses.onclick = async () => {
+// PROSES
+btnProses.onclick=async()=>{
   try{
-    const {id, sdp} = JSON.parse(code.value);
-    let peer = peers.get(id);
-
-    // FIX 5: Kalau belum ada, kita jadi ANSWERER
-    if(!peer){
-      const pc = new RTCPeerConnection(config);
-      peer = {pc, dc: null};
-      peers.set(id, peer);
-      setupPC(id);
-
-      pc.ondatachannel = e => { // dc baru datang
-        peer.dc = e.channel; // update di Map
-        setupDC(id); // FIX 1: baru setup DC setelah ada
-      }
+    const remote=JSON.parse(code.value);
+    if(!pc) pc=new RTCPeerConnection(config);
+    
+    if(remote.type==="offer"){
+      pc.ondatachannel=e=>{dc=e.channel;setDC()}
+      pc.onicecandidate=e=>{
+        if(!e.candidate){
+          code.value=JSON.stringify(pc.localDescription);
+          navigator.clipboard.writeText(code.value);
+          status.textContent="Status: Answer siap. Sudah disalin";
+          add("Kirim Answer ini balik","sys");
+        }
+      };
+      await pc.setRemoteDescription(remote);
+      const ans=await pc.createAnswer();
+      await pc.setLocalDescription(ans);
+      status.innerHTML = '<span class="spinner"></span>Membuat Answer...';
     }
-
-    // FIX 5: Handle renegosiasi - timpa aja remote desc
-    if(sdp.type === "offer"){
-      await peer.pc.setRemoteDescription(sdp);
-      const ans = await peer.pc.createAnswer();
-      await peer.pc.setLocalDescription(ans);
-      add(`<span class="peer-tag">${id}</span> Membuat Answer...`,"sys");
+    
+    if(remote.type==="answer"){
+      await pc.setRemoteDescription(remote);
+      status.textContent="Status: Menghubungkan...";
     }
-
-    if(sdp.type === "answer"){
-      if(!peer.pc.currentLocalDescription){ add("Error: Buat Offer dulu","sys"); return; }
-      await peer.pc.setRemoteDescription(sdp);
-      add(`<span class="peer-tag">${id}</span> Memproses Answer...`,"sys");
-    }
-  }catch(e){
-    add("Kode salah: " + e.message,"sys")
-  }
+  }catch{add("Kode salah!","sys")}
 }
 
-// 3. HAPUS KONEKSI AKTIF
-btnHapus.onclick = () => {
-  if(!activePeerId) return;
-  peers.get(activePeerId).pc.close();
-}
-
-// 4. KIRIM CHAT
-btnKirim.onclick = () => {
-  if(!activePeerId) return toast("Pilih koneksi dulu");
-  const peer = peers.get(activePeerId);
-  if(peer.dc && peer.dc.readyState==="open" && msg.value){
-    peer.dc.send(msg.value);
-    add(`<span class="peer-tag">Ke ${activePeerId}</span> ${msg.value}`,"me");
+// KIRIM
+btnKirim.onclick=()=>{
+  if(dc && dc.readyState==="open" && msg.value){
+    dc.send(msg.value);
+    add(msg.value,"me");
     msg.value="";
   }
 }
-msg.onkeypress = e => {if(e.key === "Enter") btnKirim.click()}
+msg.onkeypress=e=>{if(e.key==="Enter")btnKirim.click()}
 </script>
 </body>
 </html>
