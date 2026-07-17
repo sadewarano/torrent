@@ -3,253 +3,111 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>P2P Chat Relay v3</title>
+<title>P2P Chat Ringkas</title>
 <style>
-body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:600px;margin:auto}
-.card{background:#fff;padding:16px;border-radius:12px;margin:10px 0;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-h2{margin:0 0 10px 0}
-textarea{width:100%;height:80px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:0.85em}
-input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
+body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:500px;margin:auto}
+.card{background:#fff;padding:14px;border-radius:12px;margin:10px 0;box-shadow:0 2px 6px rgba(0,0,0,0.1)}
+.status{text-align:center;color:#666;font-size:.9em}
+textarea{width:100%;height:120px;border:1px solid #ccc;border-radius:8px;padding:8px;box-sizing:border-box;font-family:monospace;font-size:.8em}
 .row{display:flex;gap:8px}
-button{flex:1;padding:12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;margin:6px 0;cursor:pointer}
-button.copy{background:#28a745}
-button:disabled{background:#aaa}
-#chatBox{height:250px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:8px;background:#fafafa}
+button{flex:1;padding:12px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;cursor:pointer}
+#btnProses{background:#28a745}
+#chat{height:220px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fafafa}
 .msg{padding:6px 10px;border-radius:8px;margin:4px 0;max-width:80%;word-wrap:break-word}
 .me{background:#dcf8c6;margin-left:auto}
 .peer{background:#fff;border:1px solid #eee}
-.relay{font-size:0.8em;color:#888;background:#f8f9fa}
-.status{font-size:0.9em;color:#666;text-align:center}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:0.9em;display:none}
-.peerList{font-size:0.8em;color:#555}
+input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:.9em;display:none}
 </style>
 </head>
 <body>
 
-<h2>🌐 P2P Chat Relay v3</h2>
+<h2>🌐 P2P Chat</h2>
+<div class="card"><div class="status" id="status">Status: Belum konek</div></div>
 
 <div class="card">
-  <b class="status" id="status">Status: Belum Konek</b>
-  <div class="peerList" id="peerList">ID Kamu: <b id="myId"></b> | Teman: 0</div>
+<b>Kode Offer / Answer</b>
+<textarea id="code" placeholder="1. Klik Buat untuk hasilkan Offer
+2. Tempel kode teman lalu klik Proses"></textarea>
+<div class="row">
+<button id="btnBuat">🟢 Buat</button>
+<button id="btnProses">🔵 Proses</button>
+</div>
 </div>
 
 <div class="card">
-  <h3>Langkah 1: Buat Koneksi Baru</h3>
-  <button id="btnOffer">1. Buat Offer Ke Teman Baru</button>
-  <textarea id="localSDP" placeholder="Kode Offer/Answer muncul otomatis di sini" readonly></textarea>
-  <div class="row">
-    <button class="copy" onclick="copyCode('localSDP')">📋 Copy Kode</button>
-  </div>
+<b>Chat</b>
+<div id="chat"></div>
+<input id="msg" placeholder="Ketik pesan...">
+<button id="btnKirim" disabled>Kirim</button>
 </div>
 
-<div class="card">
-  <h3>Langkah 2: Tempel Jawaban</h3>
-  <textarea id="remoteSDP" placeholder="Tempel kode dari teman di sini"></textarea>
-  <button id="btnAnswer">2. Set Remote & Konek</button>
-</div>
-
-<div class="card">
-  <h3>Chat</h3>
-  <div id="chatBox"></div>
-  <input id="msgInput" placeholder="Ketik pesan...">
-  <button id="btnSend" disabled>Kirim</button>
-</div>
-
-<div class="toast" id="toast">Tersalin!</div>
+<div class="toast" id="toast"></div>
 
 <script>
 const status = document.getElementById("status");
-const peerListEl = document.getElementById("peerList");
-const myIdEl = document.getElementById("myId");
-const localSDP = document.getElementById("localSDP");
-const remoteSDP = document.getElementById("remoteSDP");
-const chatBox = document.getElementById("chatBox");
-const msgInput = document.getElementById("msgInput");
-const btnSend = document.getElementById("btnSend");
+const code = document.getElementById("code");
+const chat = document.getElementById("chat");
+const msg = document.getElementById("msg");
+const btnKirim = document.getElementById("btnKirim");
 
-const myId = "peer_" + crypto.randomUUID().split('-')[0]; // FIX 4
-myIdEl.textContent = myId;
+let pc, dc;
+const config = {iceServers: [{urls: "stun:stun.l.google.com:19302"}]};
 
-let peers = {}; // {peerId: {pc, dc, isActive}}
-let pendingOffers = {}; // {offerId: peerId}
+function add(t, cls){const d=document.createElement("div");d.className="msg "+cls;d.textContent=t;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",1500)}
 
-// FIX 2: LRU SEENMESSAGES. Maks 1000 ID
-let seenMessages = new Set();
-const MAX_SEEN = 1000;
-function addSeen(id){
-  seenMessages.add(id);
-  if(seenMessages.size > MAX_SEEN){
-    const first = seenMessages.values().next().value;
-    seenMessages.delete(first);
-  }
+function setDC(){
+  dc.onopen=()=>{status.textContent="Status: Konek ✅";btnKirim.disabled=false;add("Konek P2P!","status")}
+  dc.onmessage=e=>add(e.data,"peer")
+  dc.onclose=()=>{status.textContent="Status: Putus ❌";btnKirim.disabled=true}
 }
 
-const config = {iceServers: [{ urls: "stun:stun.l.google.com:19302" }]};
-
-function addMsg(text, who){
-  const div = document.createElement("div");
-  div.className = "msg " + who;
-  div.textContent = text;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
+// 1. BUAT OFFER
+btnBuat.onclick=async()=>{
+  pc=new RTCPeerConnection(config);
+  dc=pc.createDataChannel("chat");
+  setDC();
+  pc.onicecandidate=()=>{if(pc.localDescription)code.value=JSON.stringify(pc.localDescription)};
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  code.select(); navigator.clipboard.writeText(code.value); // auto copy
+  toast("Offer disalin");
+  add("Kirim kode ini ke teman","status");
 }
 
-function updatePeerList(){
-  const activeCount = Object.values(peers).filter(p=>p.isActive).length;
-  peerListEl.innerHTML = `ID Kamu: <b>${myId}</b> | Teman: ${activeCount}`;
-  status.textContent = activeCount > 0? `Status: Konek ke ${activeCount} teman ✅` : `Status: Belum Konek`;
-  btnSend.disabled = activeCount === 0;
-}
-
-function toast(msg){
-  const t = document.getElementById("toast");
-  t.textContent = msg; t.style.display = "block";
-  setTimeout(()=>t.style.display="none", 1500);
-}
-function copyCode(id){
-  const el = document.getElementById(id); el.select();
-  navigator.clipboard.writeText(el.value); toast("Tersalin!");
-}
-
-// FIX 1: BROADCAST DENGAN CEK readyState
-function broadcast(payload, excludePeerId = null){
-  if(seenMessages.has(payload.id)) return;
-  addSeen(payload.id); // FIX 2
-
-  for(let id in peers){
-    const p = peers[id];
-    if(
-      id!== excludePeerId &&
-      p.dc &&
-      p.dc.readyState === "open" // FIX 1
-    ){
-      try{
-        p.dc.send(JSON.stringify(payload));
-      }catch(e){
-        console.error("Gagal kirim ke", id, e);
-      }
-    }
-  }
-}
-
-function setupDataChannel(dc, peerId){
-  dc.onopen = () => {
-    peers[peerId].isActive = true;
-    addMsg(`Konek ke ${peerId} ✅`, "status");
-    updatePeerList();
-  };
-  dc.onmessage = (e) => {
-    let msg;
-    try{ msg = JSON.parse(e.data); }catch{return;}
-
-    if(seenMessages.has(msg.id)) return; // FIX 3: Udah liat, skip. Ga tampil 2x
-    addSeen(msg.id);
-
-    // TAMPILKAN
-    if(msg.from === myId){
-      // Pesan kita balik lagi dari relay. Skip tampil
-    }else{
-      addMsg(`Dari ${msg.from}: ${msg.text}`, "peer");
-      addMsg(`Relay dari ${msg.from}`, "relay");
-    }
-
-    // TERUSKAN
-    broadcast(msg, peerId);
-  };
-  dc.onclose = () => {
-    addMsg(`Putus dari ${peerId} ❌`, "status");
-    if(peers[peerId]) peers[peerId].isActive = false;
-    updatePeerList();
-  };
-}
-
-document.getElementById("btnOffer").onclick = async () => {
-  const newPeerId = "peer_" + crypto.randomUUID().split('-')[0]; // FIX 4
-  const offerId = "offer_" + crypto.randomUUID(); // FIX 4
-
-  peers[newPeerId] = {pc: new RTCPeerConnection(config), isActive: false};
-  pendingOffers[offerId] = newPeerId;
-
-  const peer = peers[newPeerId];
-  peer.dc = peer.pc.createDataChannel("chat");
-  setupDataChannel(peer.dc, newPeerId);
-
-  peer.pc.onicecandidate = (e) => {
-    if(peer.pc.localDescription){
-      localSDP.value = JSON.stringify({
-        type: "offer",
-        offerId: offerId,
-        from: myId,
-        sdp: peer.pc.localDescription
-      });
-    }
-  };
-
-  const offer = await peer.pc.createOffer();
-  await peer.pc.setLocalDescription(offer);
-};
-
-document.getElementById("btnAnswer").onclick = async () => {
+// 2. PROSES: OFFER JADI ANSWER, ANSWER JADI KONEK
+btnProses.onclick=async()=>{
   try{
-    const signal = JSON.parse(remoteSDP.value);
-    const remoteDesc = signal.sdp;
-
-    if(signal.type === "offer"){
-      const newPeerId = signal.from;
-      if(peers[newPeerId]) return addMsg("Sudah konek ke peer ini", "status");
-
-      peers[newPeerId] = {pc: new RTCPeerConnection(config), isActive: false};
-      const peer = peers[newPeerId];
-
-      peer.pc.ondatachannel = (e) => {
-        peer.dc = e.channel;
-        setupDataChannel(peer.dc, newPeerId);
-      };
-      peer.pc.onicecandidate = (e) => {
-        if(peer.pc.localDescription){
-          localSDP.value = JSON.stringify({
-            type: "answer",
-            offerId: signal.offerId,
-            from: myId,
-            sdp: peer.pc.localDescription
-          });
-        }
-      };
-
-      await peer.pc.setRemoteDescription(remoteDesc);
-      const answer = await peer.pc.createAnswer();
-      await peer.pc.setLocalDescription(answer);
+    const remote=JSON.parse(code.value);
+    if(!pc) pc=new RTCPeerConnection(config);
+    
+    if(remote.type==="offer"){ // kita jadi answerer
+      pc.ondatachannel=e=>{dc=e.channel;setDC()}
+      pc.onicecandidate=()=>{if(pc.localDescription)code.value=JSON.stringify(pc.localDescription)};
+      await pc.setRemoteDescription(remote);
+      const ans=await pc.createAnswer();
+      await pc.setLocalDescription(ans);
+      code.select(); navigator.clipboard.writeText(code.value); // auto copy
+      toast("Answer disalin");
+      add("Kirim Answer ini ke teman","status");
     }
-
-    if(signal.type === "answer"){
-      const peerId = pendingOffers[signal.offerId]; // FIX 1 versi sebelumnya
-      if(!peerId) return addMsg("Offer ID tidak ditemukan/kadaluarsa", "status");
-
-      await peers[peerId].pc.setRemoteDescription(remoteDesc);
-      delete pendingOffers[signal.offerId];
+    
+    if(remote.type==="answer"){ // kita terima answer
+      await pc.setRemoteDescription(remote);
     }
-  }catch(e){
-    addMsg("Kode salah! Cek lagi: " + e.message, "status");
-  }
-  remoteSDP.value = "";
-};
+  }catch{add("Kode salah!","status")}
+}
 
-btnSend.onclick = () => {
-  const text = msgInput.value;
-  if(text){
-    const payload = {
-      type: "chat", // FIX 6: kasih type
-      id: "msg_" + crypto.randomUUID(), // FIX 4
-      from: myId,
-      text: text
-    };
-    addMsg(`Kamu: ${text}`, "me"); // tampil 1x di lokal
-    broadcast(payload); // kirim ke semua
-    msgInput.value = "";
+// KIRIM CHAT
+btnKirim.onclick=()=>{
+  if(msg.value && dc.readyState==="open"){
+    dc.send(msg.value);
+    add(msg.value,"me");
+    msg.value="";
   }
-};
-msgInput.onkeypress = (e) => { if(e.key === "Enter") btnSend.onclick(); }
-
+}
+msg.onkeypress=e=>{if(e.key==="Enter")btnKirim.click()}
 </script>
 </body>
 </html>
