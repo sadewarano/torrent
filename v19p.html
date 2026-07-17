@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Data Store</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f3f3f3;max-width:600px;margin:auto;padding:15px}
+.card{background:#fff;padding:15px;margin-bottom:15px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccc;border-radius:8px;margin:10px 0}
+.row{display:flex;gap:10px}
+button{flex:1;padding:10px 14px;border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:bold}
+#pasteBtn{background:#007bff}#saveBtn{background:#28a745}#clearBtn{background:#dc3545}
+.item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #eee}
+.item-text{flex:1;word-break:break-word;padding-right:10px}.item-time{font-size:.8em;color:#888;display:block}
+.empty{text-align:center;color:#888}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;display:none}
+.copyBtn{flex:none;width:80px;background:#28a745}
+</style>
+</head>
+<body>
+<div class="card">
+<b>Masukkan input text</b>
+<input id="text" placeholder="Ketik sesuatu...">
+<div class="row">
+<button id="pasteBtn">📋 Paste</button>
+<button id="saveBtn">💾 Simpan</button>
+</div>
+</div>
+<div class="card">
+<b>Data di DB</b>
+<div id="list" class="empty">Memuat...</div>
+</div>
+<div class="card">
+<button id="clearBtn">🗑 Hapus semua data</button>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const GAS="https://script.google.com/macros/s/AKfycbzIHG5X4pf8CkHVJq3hWas0p6NdYQPd_Hf9uJXhmgd2FkMJxOCm2HIsaW0hafu7q0OmrA/exec";
+async function api(action,data={}){
+ await fetch(GAS,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,...data})});
+ return {success:true};
+}
+async function load(){
+ const r=await fetch(GAS,{method:"POST",body:JSON.stringify({action:"list"})});
+ const data=await r.json();
+ const box=document.getElementById("list");
+ if(!data.success){box.innerHTML="Gagal memuat";return;}
+ if(data.data.length===0){box.innerHTML='<div class="empty">Belum ada data</div>';return;}
+ box.innerHTML="";
+ data.data.forEach(i=>{
+  const div=document.createElement("div");div.className="item";
+  div.innerHTML=`<div class="item-text">${escapeHtml(i.text)}<span class="item-time">${formatTime(i.time)}</span></div><button class="copyBtn">Copy</button>`;
+  div.querySelector("button").onclick=()=>{navigator.clipboard.writeText(i.text);toast("Tersalin");};
+  box.appendChild(div);
+ });
+}
+pasteBtn.onclick=async()=>{try{text.value=await navigator.clipboard.readText();toast("Berhasil paste");}catch(e){alert("Clipboard tidak diizinkan");}};
+saveBtn.onclick=async()=>{const txt=text.value.trim();if(!txt)return toast("Input kosong");await api("save",{text:txt});text.value="";toast("Tersimpan");load();};
+clearBtn.onclick=async()=>{if(!confirm("Hapus semua data?"))return;await api("clear");toast("Data dihapus");load();};
+function formatTime(i){try{return new Date(i).toLocaleString("id-ID")}catch(e){return i}}
+function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function toast(m){toastEl=document.getElementById("toast");toastEl.textContent=m;toastEl.style.display="block";setTimeout(()=>toastEl.style.display="none",1500)}
+load();
+</script>
+</body></html>
