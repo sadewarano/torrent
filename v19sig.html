@@ -2,123 +2,151 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>WebRTC + WebTorrent P2P</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tool QR P2P WebRTC</title>
 <style>
-body {
-  font-family: monospace;
-  background:#111;
-  color:#0f0;
-  padding:15px;
-}
-textarea, input, button {
-  width:100%;
-  background:#000;
-  color:#0f0;
-  border:1px solid #0f0;
-  padding:5px;
-  margin:4px 0;
-}
-#log {
-  height:220px;
-  overflow:auto;
-  border:1px solid #0f0;
-  padding:5px;
-}
+body{font-family:system-ui;background:#f0f2f5;padding:16px;max-width:700px;margin:auto}
+.card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-bottom:16px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{flex:1;padding:12px;border:none;border-radius:8px;background:#ddd;font-weight:600;cursor:pointer}
+.tab.active{background:#007bff;color:#fff}
+textarea{width:100%;height:180px;border:1px solid #ccc;border-radius:8px;padding:10px;font-family:monospace;font-size:0.85em;box-sizing:border-box}
+.row{display:flex;gap:8px}
+button{flex:1;padding:14px;border:none;border-radius:8px;background:#007bff;color:#fff;font-weight:600;margin:10px 0;font-size:1em;cursor:pointer}
+button.paste{background:#17a2b8}
+button.copy{background:#28a745}
+button.scan{background:#ff5722}
+button.stop{background:#dc3545}
+#qrcode{display:flex;justify-content:center;align-items:center;padding:20px;background:#fff;border:2px dashed #007bff;border-radius:12px;min-height:350px}
+#reader{border-radius:12px;overflow:hidden;min-height:300px}
+.info{font-size:0.9em;color:#555;margin-top:8px}
+.status{text-align:center;font-weight:bold;padding:10px;background:#e9ecef;border-radius:8px}
+.hide{display:none}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
-<h3>🔗 WebRTC + WebTorrent (Pure HTML)</h3>
+<h2>🌐 Tool QR P2P WebRTC</h2>
+<div class="card"><b class="status" id="status">Pilih Tab</b></div>
 
-<button onclick="createOffer()">Create Offer</button>
-<textarea id="offer" placeholder="Offer"></textarea>
+<div class="tabs">
+  <button class="tab active" onclick="showTab('generate')">Buat QR</button>
+  <button class="tab" onclick="showTab('scan')">Scan QR</button>
+</div>
 
-<button onclick="createAnswer()">Create Answer</button>
-<textarea id="answer" placeholder="Answer"></textarea>
+<!-- TAB 1: GENERATE -->
+<div id="tab-generate" class="card">
+  <h3>1. Tempel Data JSON</h3>
+  <textarea id="inputData" placeholder='{"type":"offer","sdp":"v=0..."}'></textarea>
+  <div class="row">
+    <button class="paste" onclick="pasteData()">📋 Tempel</button>
+    <button onclick="clearInput()">🗑️ Hapus</button>
+  </div>
+  <button onclick="generateQR()">Buat QR</button>
+  <div class="info" id="infoGen">Panjang data: 0 karakter</div>
 
-<button onclick="setAnswer()">Set Answer</button>
+  <h3>2. Hasil QR</h3>
+  <div id="qrcode">QR akan muncul di sini</div>
+  <button class="copy" onclick="copyInput()">📋 Copy Data Asli</button>
+</div>
 
-<hr>
+<!-- TAB 2: SCAN -->
+<div id="tab-scan" class="card hide">
+  <h3>1. Scan QR</h3>
+  <button class="scan" id="btnStart" onclick="startScan()">📷 Mulai Scan</button>
+  <button class="stop hide" id="btnStop" onclick="stopScan()">❌ Stop Scan</button>
+  <div id="reader"></div>
 
-<div id="log"></div>
-
-<input id="msg" placeholder="Ketik chat / magnet link">
-<button onclick="send()">Send</button>
+  <h3>2. Hasil Scan</h3>
+  <textarea id="outputData" readonly placeholder="Hasil scan akan muncul di sini"></textarea>
+  <div class="row">
+    <button class="copy" onclick="copyOutput()">📋 Copy Hasil</button>
+    <button onclick="clearOutput()">🗑️ Hapus</button>
+  </div>
+  <div class="info" id="infoScan">Panjang data: 0 karakter</div>
+</div>
 
 <script>
-const pc = new RTCPeerConnection();
-let channel;
-const logBox = document.getElementById("log");
+const inputData = document.getElementById("inputData");
+const outputData = document.getElementById("outputData");
+const status = document.getElementById("status");
+let html5QrCode, qr;
 
-const client = new WebTorrent();
+// CONTOH OTOMATIS
+inputData.value = `{"type":"offer","sdp":"v=0\\r\\no=- 3623998589613671325 2 IN IP4 127.0.0.1\\r\\ns=-\\r\\nt=0 0\\r\\na=group:BUNDLE 0\\r\\na=extmap-allow-mixed\\r\\na=msid-semantic: WMS\\r\\nm=application 11457 UDP/DTLS/SCTP webrtc-datachannel\\r\\nc=IN IP4 36.73.33.221\\r\\na=ice-ufrag:FdrE\\r\\na=ice-pwd:VDgUESdiFt3rRhpHtGpT9P1x\\r\\na=fingerprint:sha-256 56:68:CB:2E:23:21:03:34:58:BB:1A:84:42:B0:48:CF:EE:CA:6B:35:44:6B:4D:AC:1F:E1:E9:3A:97:23:41:81\\r\\na=setup:actpass\\r\\na=mid:0\\r\\na=sctp-port:5000\\r\\n"}`;
+updateInfoGen();
 
-function log(txt){
-  logBox.innerHTML += txt + "<br>";
-  logBox.scrollTop = logBox.scrollHeight;
+inputData.oninput = updateInfoGen;
+outputData.oninput = updateInfoScan;
+
+// GANTI TAB
+function showTab(tab){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('#tab-generate, #tab-scan').forEach(t=>t.classList.add('hide'));
+
+  if(tab==='generate'){
+    document.querySelectorAll('.tab')[0].classList.add('active');
+    document.getElementById('tab-generate').classList.remove('hide');
+    status.textContent = "Tab: Buat QR";
+    stopScan(); // stop kamera kalau pindah tab
+  }else{
+    document.querySelectorAll('.tab')[1].classList.add('active');
+    document.getElementById('tab-scan').classList.remove('hide');
+    status.textContent = "Tab: Scan QR";
+  }
 }
 
-pc.ondatachannel = e => {
-  channel = e.channel;
-  setupChannel();
-};
+// BAGIAN GENERATE
+function updateInfoGen(){ document.getElementById("infoGen").textContent = `Panjang data: ${inputData.value.length} karakter`; }
+async function pasteData(){ try{ inputData.value = await navigator.clipboard.readText(); updateInfoGen(); }catch{ alert("Gagal tempel"); } }
+function clearInput(){ inputData.value = ""; updateInfoGen(); document.getElementById("qrcode").innerHTML = "QR akan muncul di sini"; }
+async function copyInput(){ try{ await navigator.clipboard.writeText(inputData.value); alert("Tersalin!"); }catch{ alert("Gagal copy"); } }
 
-function setupChannel(){
-  channel.onopen = ()=>log("✅ WebRTC connected");
-  channel.onmessage = e => {
-    log("Peer: " + e.data);
-    if(e.data.startsWith("magnet:")){
-      startTorrent(e.data);
-    }
-  };
-}
-
-async function createOffer(){
-  channel = pc.createDataChannel("chat");
-  setupChannel();
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  offerBox.value = JSON.stringify(offer);
-}
-
-async function createAnswer(){
-  const offer = JSON.parse(offerBox.value);
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  answerBox.value = JSON.stringify(answer);
-}
-
-async function setAnswer(){
-  const answer = JSON.parse(answerBox.value);
-  await pc.setRemoteDescription(answer);
-}
-
-function send(){
-  const text = msg.value;
-  channel.send(text);
-  log("Me: " + text);
-  msg.value = "";
-}
-
-function startTorrent(magnet){
-  log("⬇️ Start torrent...");
-  client.add(magnet, torrent => {
-    log("📁 " + torrent.name);
-    torrent.on('download', () => {
-      log("⬇️ " + (torrent.progress*100).toFixed(1) + "%");
-    });
-    torrent.files.forEach(file => {
-      file.appendTo(document.body);
-    });
+function generateQR(){
+  const data = inputData.value.trim();
+  if(!data) return alert("Data kosong");
+  document.getElementById("qrcode").innerHTML = "";
+  qr = new QRCode(document.getElementById("qrcode"), {
+    text: data,
+    width: 320,
+    height: 320,
+    correctLevel : QRCode.CorrectLevel.L
   });
 }
 
-const offerBox = document.getElementById("offer");
-const answerBox = document.getElementById("answer");
-const msg = document.getElementById("msg");
-</script>
+// BAGIAN SCAN
+function updateInfoScan(){ document.getElementById("infoScan").textContent = `Panjang data: ${outputData.value.length} karakter`; }
+function clearOutput(){ outputData.value = ""; updateInfoScan(); }
 
+function startScan(){
+  document.getElementById("btnStart").classList.add("hide");
+  document.getElementById("btnStop").classList.remove("hide");
+  status.textContent = "Status: Sedang Scan...";
+
+  html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 280 },
+    (decodedText) => {
+      outputData.value = decodedText;
+      updateInfoScan();
+      status.textContent = "Status: Berhasil Scan! ✅";
+      stopScan();
+    }
+  ).catch(err => { status.textContent = "Gagal buka kamera"; alert(err); });
+}
+
+function stopScan(){
+  if(html5QrCode){
+    html5QrCode.stop().then(() => { html5QrCode.clear(); document.getElementById("reader").innerHTML = ""; });
+  }
+  document.getElementById("btnStart").classList.remove("hide");
+  document.getElementById("btnStop").classList.add("hide");
+  if(status.textContent === "Status: Sedang Scan...") status.textContent = "Tab: Scan QR";
+}
+
+async function copyOutput(){ try{ await navigator.clipboard.writeText(outputData.value); alert("Tersalin!"); }catch{ alert("Gagal copy"); } }
+
+</script>
 </body>
 </html>
