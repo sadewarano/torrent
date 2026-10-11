@@ -5,7 +5,8 @@
 <style>
 body{margin:0;background:#0a0a0a;color:#00ff88;font-family:monospace;padding:12px;word-break:break-all}
 #status{color:#888;font-size:11px;border-bottom:1px solid #222;padding-bottom:8px;margin-bottom:8px}
-#log{white-space:pre-wrap;font-size:12px;line-height:1.6}
+#log{font-size:12px;line-height:1.7}
+.item{padding:2px 0}.item-dl{color:#ffcc00}.item-seed{color:#00ff88}
 </style></head><body>
 <div id="status">Loading...</div>
 <div id="log"></div>
@@ -14,71 +15,86 @@ const API="https://script.google.com/macros/s/AKfycbwCi-pP169wRNLiieaXqn_hfejzSE
 const client=new WebTorrent();
 let seeders = {};
 let lastList = [];
+let ui = {};
+let failedHashes = new Set(); // BLACKLIST DEAD
 
-function log(t){
-  let time=new Date().toLocaleTimeString();
-  let el=document.getElementById('log');
-  el.textContent=`[${time}] ${t}\n`+el.textContent;
-}
 function updateStatus(){
-  let totalPeer=Object.values(seeders).reduce((a,c)=>a+(c.numPeers||0),0);
-  document.getElementById('status').textContent=`Seeder Aktif: ${Object.keys(seeders).length} | Total Peer: ${totalPeer} | Monitoring GAS 3s | UNLIMITED`;
+  let aktif=Object.values(seeders).filter(t=>t.progress>=1).length;
+  let dl=Object.values(seeders).filter(t=>t.progress<1).length;
+  let peer=Object.values(seeders).reduce((a,c)=>a+(c.numPeers||0),0);
+  document.getElementById('status').textContent=`Aktif: ${aktif} | DL: ${dl} | Peer: ${peer} | Dead blacklisted: ${failedHashes.size}`;
+}
+function ensureDiv(hash){
+  if(ui[hash]) return ui[hash];
+  let el=document.getElementById('log');
+  let div=document.createElement('div');
+  div.id='h-'+hash.substring(0,8);
+  div.className='item item-dl';
+  el.prepend(div);
+  ui[hash]=div;
+  return div;
 }
 function extractHash(v){let m=v.match(/btih:([a-f0-9]{40})/i);if(m)return m[1];if(/^[a-f0-9]{40}$/i.test(v))return v;return null;}
 function buildMagnet(h){
-  // tracker diperbanyak biar jadi seeder lebih mudah, ini tidak merubah logika
   let m='magnet:?xt=urn:btih:'+h;
   ["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz","wss://tracker.fastcast.nz","wss://tracker.webtorrent.dev"].forEach(tr=>m+="&tr="+encodeURIComponent(tr));
   return m;
 }
-
-function addTorrent(hash, sumber="GAS"){
-  if(seeders[hash]) return;
-
-  // INI LOGIKA ASLI KAMU - TIDAK SAYA RUBAH
-  client.add(buildMagnet(hash), t=>{
-    seeders[hash] = t;
+function addTorrent(hash){
+  if(seeders[hash] || failedHashes.has(hash)) return;
+  let div=ensureDiv(hash);
+  div.textContent=`[${new Date().toLocaleTimeString()}] ⬇️ ${hash.substring(0,8)}... 0% | connecting...`;
+  let hasMeta=false;
+  let t = client.add(buildMagnet(hash));
+  seeders[hash]=t;
+  updateStatus();
+  t.on('metadata',()=>{ hasMeta=true; });
+  t.on('wire',()=>{ hasMeta=true; });
+  t.on('download',()=>{
+    hasMeta=true;
+    let p=Math.floor(t.progress*100);
+    if(p>=100){
+      div.className='item item-seed';
+      div.textContent=`[${new Date().toLocaleTimeString()}] ✅ ${hash.substring(0,8)}... SEEDER AKTIF | ${t.name} | Peer:${t.numPeers}`;
+      updateStatus(); return;
+    }
+    let speed=(t.downloadSpeed/1024/1024).toFixed(2);
+    div.textContent=`[${new Date().toLocaleTimeString()}] ⏳ ${hash.substring(0,8)}... ${p}% | ${t.name||'...'} | ${speed} MB/s | Peer:${t.numPeers}`;
     updateStatus();
-    log(`⬇️ ${sumber} ${hash.substring(0,8)}... Download`);
-
-    t.on("download", ()=> updateStatus());
-    t.on("wire", ()=> updateStatus());
-
-    t.on("done", ()=>{
-      log(`✅ ${hash.substring(0,8)}... SELESAI -> MODE SEEDER | ${t.name} | ${Object.keys(seeders).length} aktif`);
-      updateStatus();
-    });
   });
+  t.on('done',()=>{
+    div.className='item item-seed';
+    div.textContent=`[${new Date().toLocaleTimeString()}] ✅ ${hash.substring(0,8)}... SEEDER AKTIF | ${t.name} | Peer:${t.numPeers}`;
+    updateStatus();
+  });
+  setTimeout(()=>{
+    if(!hasMeta && (!seeders[hash] || seeders[hash].progress===0)){
+      try{ seeders[hash].destroy(); }catch(e){}
+      delete seeders[hash];
+      if(ui[hash]){ ui[hash].remove(); delete ui[hash]; }
+      failedHashes.add(hash); // MASUK BLACKLIST
+      updateStatus();
+    }
+  }, 20000);
 }
-
 async function cekGAS(){
   try{
     const res=await fetch(API+"?t="+Date.now());
     const data=await res.json();
-    let kode="";
-    if(Array.isArray(data)&&data.length){kode=data[data.length-1].kode||"";}
-    else if(data&&data.kode){kode=data.kode;}
+    let kode=""; if(Array.isArray(data)&&data.length){kode=data[data.length-1].kode||"";} else if(data&&data.kode){kode=data.kode;}
     if(!kode) return;
-    let arr = kode.split(",").filter(Boolean).map(extractHash).filter(Boolean);
-
-    // LOGIKA ASLI KAMU - CEK MAGNET BARU
-    let isNew = JSON.stringify(arr)!== JSON.stringify(lastList);
-    if(isNew && arr.length>0){
-      // kalau baru pertama load (refresh), mulai dari terbaru biar cepat
-      if(lastList.length===0){
-        arr=[...arr].reverse();
-        log(`🔄 Refresh - Load ${arr.length} torrent dari terbaru`);
-      }else{
-        log(`🆕 ${arr.filter(h=>!seeders[h]).length} magnet baru dari GAS`);
+    let arr=kode.split(",").filter(Boolean).map(extractHash).filter(Boolean);
+    if(JSON.stringify(arr)!==JSON.stringify(lastList)){
+      // CUMA AMBIL YANG BENAR-BENAR BARU
+      let newHashes = arr.filter(h=>!lastList.includes(h) &&!seeders[h] &&!failedHashes.has(h));
+      if(newHashes.length>0){
+        newHashes.reverse().forEach(h=> addTorrent(h));
       }
-      arr.forEach(hash=>{ if(!seeders[hash]) addTorrent(hash,"GAS"); });
       lastList=arr;
     }
     updateStatus();
-  }catch(e){console.log(e)}
+  }catch(e){}
 }
-
-log("🌱 Server Seeder UNLIMITED - Logika ASLI berjalan");
 cekGAS();
 setInterval(cekGAS, 3000);
 </script></body></html>
