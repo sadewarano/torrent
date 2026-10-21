@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HIVE ENGINE - V5 SWAP TRIBALDEX</title>
+<script src="https://unpkg.com/@hiveio/hive-js@latest/dist/hive.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080a0c;color:#e6e8ea;font-family:'Inter',sans-serif}
+.app{max-width:500px;margin:auto;min-height:100vh;background:radial-gradient(700px at 50% -150px,#1a2a22 0%,transparent 60%),#080a0c;padding-bottom:20px}
+.header{padding:18px 16px 10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10;background:rgba(8,10,12,.9);backdrop-filter:blur(10px)}
+.card{background:linear-gradient(180deg,#1c2126 0%,#161a1e 100%);border:1px solid #23282e;border-radius:18px;padding:16px;margin:12px}
+.card-swap{border-color:#1e3a28;box-shadow:0 0 25px rgba(0,255,136,.08)}
+label{display:block;font-size:10px;color:#7a7f85;font-weight:700;margin-top:12px;text-transform:uppercase}
+input,select{width:100%;padding:14px;margin-top:6px;border-radius:12px;border:1px solid #2a2f35;background:#0d0f11;color:#fff;outline:none;font-family:'JetBrains Mono',monospace;font-size:13px}
+.btn{width:100%;padding:13px;border-radius:12px;border:0;font-weight:800;cursor:pointer}.btn:disabled{opacity:.4}
+.btn-g{background:#00ff88;color:#000}.btn-r{background:#ff3b4a;color:#fff}.btn-d{background:#242a30;color:#d0d4d8}
+.btn-kc{background:linear-gradient(90deg,#00ff88,#00cc6a);color:#000}.btn-logout{background:#2a1a1e;color:#ff6b7a;border:1px solid #3a2025;padding:6px 12px;font-size:11px;width:auto;border-radius:20px}
+.btn-tab{flex:1;padding:10px;font-size:11px;border-radius:10px;border:1px solid #2a2f35;background:#0d0f11;color:#7a7f85}.btn-tab.active{background:#00ff88;color:#000;border-color:#00ff88}
+.btn-swap{padding:18px;font-size:18px;margin-top:12px;background:linear-gradient(90deg,#00ff88,#00cc6a);color:#000}
+.status{padding:12px;border-radius:12px;background:#0d0f11;border:1px solid #22272d;margin-top:10px;font-size:11px;white-space:pre-wrap;line-height:1.6;font-family:'JetBrains Mono',monospace}
+.pill{background:#1e2429;border:1px solid #2a2f35;padding:6px 10px;border-radius:20px;font-size:11px;display:inline-block;margin:3px;font-family:'JetBrains Mono'}
+.hidden{display:none!important}.success{color:#00ff88}.error{color:#ff6b6b}
+.connected-bar{display:flex;justify-content:space-between;align-items:center;background:#0f1a14;border:1px solid #1e3a28;padding:12px 14px;border-radius:12px;margin-top:8px}
+.swap-box{background:#0d0f11;border:1px solid #2a2f35;border-radius:16px;padding:14px;margin-top:10px;position:relative}
+.swap-arrow{width:40px;height:40px;border-radius:50%;background:#1c2126;border:1px solid #2a2f35;display:flex;align-items:center;justify-content:center;margin:-10px auto;position:relative;z-index:2;cursor:pointer;font-size:18px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:#161a1e;border:1px solid #2a2f35;border-radius:20px;padding:18px;width:100%;max-width:400px}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header"><h3>HIVE ENGINE • SWAP V5</h3><span id="kcDetect">CHECKING...</span></div>
+
+<div class="card" id="loginCard">
+<div id="connectedBar" class="connected-bar hidden"><div><b id="connectedUser">@-</b><div id="connectedMode" style="font-size:10px">-</div></div><button onclick="doLogout()" class="btn btn-logout">LOGOUT</button></div>
+<div id="kcSection"><label>Keychain Login</label><input id="user" placeholder="masabqory"><button id="kcBtn" onclick="loginKC()" class="btn btn-kc" style="margin-top:10px">🔑 LOGIN KEYCHAIN</button><div id="kcStatus" class="status">Detecting...</div></div>
+<div id="manualSection" class="hidden"><label>Manual (Active Key)</label><input id="userManual" placeholder="username"><input id="key" type="password" placeholder="5J... Active Key" style="margin-top:8px"><button id="loadBtn" class="btn btn-d" style="margin-top:10px">HUBUNGKAN</button></div>
+<div id="info" class="status">Belum terhubung.</div>
+</div>
+
+<div class="card card-swap hidden" id="swapCard">
+<label>SWAP TRIBALDEX - marketpools</label>
+
+<div class="swap-box">
+<label style="margin-top:0">FROM</label>
+<select id="fromToken"></select>
+<div style="display:flex;gap:8px;margin-top:8px"><input id="fromAmount" type="number" step="any" placeholder="0.00" style="flex:1"><button class="btn btn-d" style="width:80px" onclick="setMaxSwap()">MAX</button></div>
+<div id="fromBal" style="font-size:10px;color:#7a7f85;margin-top:6px">-</div>
+</div>
+
+<div class="swap-arrow" onclick="flipSwap()">⇅</div>
+
+<div class="swap-box">
+<label style="margin-top:0">TO</label>
+<select id="toToken"></select>
+<div id="toAmountBox" class="status" style="margin-top:8px">Estimasi: -</div>
+<div id="toBal" style="font-size:10px;color:#7a7f85;margin-top:6px">-</div>
+</div>
+
+<label>Slippage (Tribaldex pakai maxSlippage)</label><select id="slip"><option value="1">1%</option><option value="3" selected>3% (Tribaldex default)</option><option value="5">5% Agresif</option><option value="10">10%</option></select>
+
+<div id="poolInfo" class="status">Pilih token untuk cek pool.</div>
+<div id="calcInfo" class="status">Isi jumlah untuk kalkulasi.</div>
+
+<button id="swapBtn" class="btn btn-swap" onclick="doSwap()">SWAP SEKARANG</button>
+<div id="swapLog" class="status">Siap swap via marketpools:swapTokens</div>
+</div>
+
+<div class="card">
+<div style="display:flex;gap:8px"><button class="btn btn-g" style="font-size:12px" onclick="openDepo()">⬇️ DEPO HIVE</button><button class="btn btn-d" style="font-size:12px;border-color:#ff3b4a;color:#ff8a94" onclick="openWd()">⬆️ WD SWAP.HIVE</button></div>
+<div id="swapHiveBox" class="status" style="margin-top:8px">-</div>
+<div id="bals" style="margin-top:12px"></div>
+</div>
+</div>
+
+<div id="depoModal" class="modal-bg hidden"><div class="modal"><h4>DEPO HIVE → SWAP.HIVE</h4><div id="hiveNativeBal" class="status">-</div><input id="depoAmount" type="number" step="0.001"><div id="depoLog" class="status">Siap.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><button class="btn btn-d" onclick="closeDepo()">BATAL</button><button id="depoBtn" class="btn btn-g" onclick="doDepo()">DEPOSIT</button></div></div></div>
+<div id="wdModal" class="modal-bg hidden"><div class="modal"><h4>WD SWAP.HIVE → HIVE</h4><div id="swapHiveBalWd" class="status">-</div><input id="wdAmount" type="number" step="0.001"><div id="wdLog" class="status">Siap.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><button class="btn btn-d" onclick="closeWd()">BATAL</button><button id="wdBtn" class="btn btn-r" onclick="doWd()">WITHDRAW</button></div></div></div>
+
+<script>
+const ENGINE_API="https://api.hive-engine.com/rpc/contracts";
+hive.api.setOptions({url:"https://api.hive.blog"});
+const $=id=>document.getElementById(id);
+let account="", activeKey="", ownedMap={}, tokenPrec={}, currentPool=null, useKeychain=false, nativeHiveBal=0, mySwapHive=0;
+
+function forceLowercase(el){let v=el.value.toLowerCase().replace(/\s+/g,"").replace(/[^a-z0-9.-]/g,""); if(el.value!==v) el.value=v;}
+["user","userManual"].forEach(id=>$(id).addEventListener("input",function(){forceLowercase(this);}));
+
+function isKC(){return typeof window.hive_keychain!=='undefined' && window.hive_keychain!==null;}
+function setDetect(t,ok){$("kcDetect").textContent=t; $("kcDetect").style.color=ok?"#00ff88":"#ff6b6b";}
+function checkKC(){ if(isKC()){ $("kcSection").classList.remove("hidden"); $("manualSection").classList.add("hidden"); setDetect("KEYCHAIN OK",true);} else{ $("kcSection").classList.add("hidden"); $("manualSection").classList.remove("hidden"); setDetect("MANUAL MODE",false);} }
+window.addEventListener('hive_keychain_ready',checkKC);
+let tries=0; let iv=setInterval(()=>{tries++; if(isKC()){clearInterval(iv); checkKC();} if(tries>20){clearInterval(iv); checkKC();}},300);
+
+async function rpc(m,p){let r=await fetch(ENGINE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",method:m,params:p,id:1})}); let j=await r.json(); if(j.error) throw new Error(j.error.message); return j.result;}
+
+async function loadBalances(){
+ let balances=await rpc("find",{contract:"tokens",table:"balances",query:{account},limit:1000});
+ ownedMap={}; balances.forEach(i=>ownedMap[i.symbol]=parseFloat(i.balance)||0);
+ mySwapHive=ownedMap["SWAP.HIVE"]||0;
+ // precisions
+ let tokens=await rpc("find",{contract:"tokens",table:"tokens",query:{},limit:1000});
+ tokenPrec={}; tokens.forEach(t=>tokenPrec[t.symbol]=t.precision||8);
+ $("swapHiveBox").textContent=`SWAP.HIVE: ${mySwapHive.toFixed(5)} | HIVE native: ${nativeHiveBal.toFixed(3)}`;
+ $("bals").innerHTML=Object.entries(ownedMap).filter(([,b])=>b>0).sort((a,b)=>b[1]-a[1]).map(i=>`<span class="pill">${i[0]}: ${i[1]}</span>`).join("")||`<span class="pill">0</span>`;
+ buildTokenOptions();
+}
+
+function buildTokenOptions(){
+ let all=Object.keys(ownedMap).filter(s=>s!=="SWAP.HIVE"&&ownedMap[s]>0).sort((a,b)=>ownedMap[b]-ownedMap[a]);
+ let common=["ALIVE","LEO","BEE","POB","VYB","NEOXAG","SPS","DEC","HBD"];
+ let list=[...new Set([...all, ...common, "SWAP.HIVE"])];
+ let fromHtml="", toHtml="";
+ list.forEach(s=>{ fromHtml+=`<option value="${s}">${s} ${ownedMap[s]?`— ${ownedMap[s]}`:''}</option>`; toHtml+=`<option value="${s}">${s}</option>`; });
+ $("fromToken").innerHTML=fromHtml; $("toToken").innerHTML=toHtml;
+ if(!$("fromToken").value) $("fromToken").value="SWAP.HIVE";
+ if(!$("toToken").value) $("toToken").value=all[0]||"ALIVE";
+ if($("fromToken").value===$("toToken").value){ $("toToken").value=$("fromToken").value==="SWAP.HIVE"?"ALIVE":"SWAP.HIVE"; }
+ updateBalancesUI();
+ loadPool();
+}
+
+function updateBalancesUI(){
+ let f=$("fromToken").value, t=$("toToken").value;
+ $("fromBal").textContent=`Balance: ${ownedMap[f]||0} ${f}`;
+ $("toBal").textContent=`Balance: ${ownedMap[t]||0} ${t}`;
+}
+
+async function loadNativeHive(){
+ return new Promise((res)=>{ hive.api.getAccounts([account],(err,accs)=>{ if(err||!accs||!accs[0]){ nativeHiveBal=0; res(0); return;} nativeHiveBal=parseFloat((accs[0].balance||"0 HIVE").split(" ")[0])||0; $("hiveNativeBal").textContent=`${nativeHiveBal.toFixed(3)} HIVE`; res(nativeHiveBal); }); });
+}
+
+async function loadPool(){
+ let from=$("fromToken").value, to=$("toToken").value;
+ if(!from||!to||from===to){ $("poolInfo").textContent="Pilih pair berbeda"; return; }
+ // tokenPair format di marketpools: urut alphabetical? Docs: tokenPair seperti "SWAP.HIVE:ALIVE"
+ let pair1=`${from}:${to}`; let pair2=`${to}:${from}`;
+ let pool=null;
+ try{
+  pool=await rpc("findOne",{contract:"marketpools",table:"pools",query:{tokenPair:pair1}});
+  if(!pool) pool=await rpc("findOne",{contract:"marketpools",table:"pools",query:{tokenPair:pair2}});
+ }catch(e){ $("poolInfo").textContent="Error pool: "+e.message; return; }
+ if(!pool){ $("poolInfo").textContent=`❌ Tidak ada pool ${from}:${to} di Tribaldex (marketpools)`; currentPool=null; $("toAmountBox").textContent="No pool"; return; }
+ currentPool=pool;
+ $("poolInfo").innerHTML=`✅ Pool ${pool.tokenPair}<br>Base: ${pool.baseQuantity} | Quote: ${pool.quoteQuantity}<br>Fee: ${pool.tradeFeeMul?((1-pool.tradeFeeMul/1000)*100).toFixed(2)+'%':''} LP: ${pool.totalShares||'-'}`;
+ calculateSwap();
+}
+
+function calculateSwap(){
+ if(!currentPool) return;
+ let from=$("fromToken").value, to=$("toToken").value, amount=parseFloat($("fromAmount").value)||0;
+ if(!(amount>0)){ $("calcInfo").textContent="Isi jumlah FROM"; $("toAmountBox").textContent="Estimasi: -"; return; }
+ let fromBal=ownedMap[from]||0;
+ if(amount>fromBal){ $("calcInfo").textContent=`Saldo ${from} kurang (${fromBal})`; }
+ // simple AMM calculation: x*y=k
+ // pool tokenPair order matters: pool.tokenPair = "A:B", baseQuantity = A, quoteQuantity = B
+ let pairTokens=currentPool.tokenPair.split(":");
+ let baseSym=pairTokens[0], quoteSym=pairTokens[1];
+ let baseQ=parseFloat(currentPool.baseQuantity), quoteQ=parseFloat(currentPool.quoteQuantity);
+ let feeMul=currentPool.tradeFeeMul||997; // 0.3% default -> 997/1000
+ let amountAfterFee = amount * feeMul / 1000;
+ let out=0;
+ if(from===baseSym){ // from base -> quote
+   out = (quoteQ * amountAfterFee) / (baseQ + amountAfterFee);
+ } else { // from quote -> base
+   out = (baseQ * amountAfterFee) / (quoteQ + amountAfterFee);
+ }
+ let price = amount>0? out/amount : 0;
+ $("toAmountBox").textContent=`Estimasi dapat: ~${out.toFixed(6)} ${to}`;
+ $("calcInfo").textContent=`SWAP ${amount} ${from} → ~${out.toFixed(6)} ${to}\nPrice: 1 ${from} = ${price.toFixed(6)} ${to}\nFee: ~${(amount - amountAfterFee).toFixed(6)} ${from}`;
+ $("calcInfo").dataset.out=out;
+}
+
+function flipSwap(){
+ let f=$("fromToken").value, t=$("toToken").value;
+ $("fromToken").value=t; $("toToken").value=f;
+ updateBalancesUI(); loadPool();
+}
+
+function setMaxSwap(){
+ let from=$("fromToken").value;
+ $("fromAmount").value=ownedMap[from]||0;
+ calculateSwap();
+}
+
+function broadcast(jsonPayload, onSuccess, onError){
+ if(useKeychain && isKC()){
+  window.hive_keychain.requestCustomJson(account, "ssc-mainnet-hive", "Active", jsonPayload, "Swap "+$("fromToken").value+"->"+$("toToken").value, function(res){ if(res.success) onSuccess(res); else onError(new Error(res.message)); });
+ }else{
+  hive.broadcast.customJson(activeKey,[account],[],"ssc-mainnet-hive",jsonPayload,function(err,res){ if(err) onError(err); else onSuccess(res); });
+ }
+}
+
+async function doSwap(){
+ let from=$("fromToken").value, to=$("toToken").value;
+ let amount=parseFloat($("fromAmount").value)||0;
+ if(!from||!to||from===to){ $("swapLog").textContent="Pair invalid"; return; }
+ if(!(amount>0)){ $("swapLog").textContent="Jumlah invalid"; return; }
+ if(!currentPool){ $("swapLog").textContent="Tidak ada pool untuk pair ini"; return; }
+ let fromPrec=tokenPrec[from]||8;
+ let qtyStr = amount.toFixed(fromPrec);
+ let slip = parseFloat($("slip").value)||3;
+ // Tribaldex docs: marketpools swapTokens
+ // payload: { tokenPair, tokenSymbol, tokenAmount, tradeType, maxSlippage? docs pakai tradeType exactInput }
+ let payload={
+   tokenPair: currentPool.tokenPair, // harus persis yang ada di pool
+   tokenSymbol: from,
+   tokenAmount: qtyStr,
+   tradeType: "exactInput"
+ };
+ // beberapa pool butuh maxSlippage, coba include
+ let payloadWithSlip={...payload, maxSlippage: slip.toString() };
+
+ // coba pakai yang ada slippage dulu, kalau gagal fallback tanpa slippage
+ let json1=JSON.stringify({contractName:"marketpools",contractAction:"swapTokens",contractPayload:payloadWithSlip});
+ let json2=JSON.stringify({contractName:"marketpools",contractAction:"swapTokens",contractPayload:payload});
+
+ let oldFrom=ownedMap[from]||0, oldTo=ownedMap[to]||0;
+ $("swapBtn").disabled=true;
+ $("swapLog").textContent=`SWAP ${qtyStr} ${from} → ${to} via ${currentPool.tokenPair}...`;
+
+ function onOk(r){
+   let txid=r.result?.id||r.id||'';
+   $("swapLog").innerHTML=`<span class="success">✓ SWAP BROADCAST OK</span> TX:${txid.slice(0,8)}<br><a href="https://history.hive-engine.com/tx/${txid}" target="_blank" style="color:#00ff88">Lihat TX</a><br>⏳ Menunggu block...`;
+   let tries=0;
+   function tick(){
+     tries++; loadBalances().then(()=>{
+       let nf=ownedMap[from]||0, nt=ownedMap[to]||0;
+       if(Math.abs(nf-oldFrom)>1e-8 || Math.abs(nt-oldTo)>1e-8){
+         $("swapLog").innerHTML+=`<br><span class="success">✓ CONFIRMED</span> ${from} ${oldFrom}→${nf} | ${to} ${oldTo}→${nt}`;
+         $("swapBtn").disabled=false;
+         return;
+       }
+       if(tries>=12){ $("swapBtn").disabled=false; $("swapLog").textContent+=`\nSelesai cek, buka tribaldex.com`; return; }
+       setTimeout(tick,2000);
+     });
+   }
+   setTimeout(tick,2000);
+ }
+
+ function onErr(e){
+   // fallback tanpa slippage
+   if(JSON.stringify(e).includes("maxSlippage") || e.message.includes("maxSlippage")){
+     $("swapLog").textContent=`Coba tanpa slippage...`;
+     broadcast(json2, onOk, (e2)=>{ $("swapBtn").disabled=false; $("swapLog").textContent=`❌ GAGAL SWAP: ${e2.message}`; });
+   } else {
+     $("swapBtn").disabled=false;
+     $("swapLog").textContent=`❌ GAGAL SWAP: ${e.message}\nPayload: ${json1}`;
+   }
+ }
+
+ broadcast(json1, onOk, onErr);
+}
+
+function openDepo(){ $("depoModal").classList.remove("hidden"); loadNativeHive(); }
+function closeDepo(){ $("depoModal").classList.add("hidden"); }
+function openWd(){ $("wdModal").classList.remove("hidden"); $("swapHiveBalWd").textContent=`${mySwapHive.toFixed(5)} SWAP.HIVE`; }
+function closeWd(){ $("wdModal").classList.add("hidden"); }
+
+function doDepo(){
+ let amt=parseFloat($("depoAmount").value)||0; if(amt<0.001){ $("depoLog").textContent="Min 0.001"; return; }
+ $("depoBtn").disabled=true; let memo=JSON.stringify({id:"ssc-mainnet-hive",json:{contractName:"hivepegged",contractAction:"buy",contractPayload:{}}});
+ let amountStr=amt.toFixed(3)+" HIVE";
+ if(useKeychain && isKC()){
+  window.hive_keychain.requestTransfer(account, "honey-swap", amountStr, memo, "Active", function(res){ $("depoBtn").disabled=false; if(res.success){ $("depoLog").innerHTML=`<span class="success">✓ OK</span>`; setTimeout(()=>{loadNativeHive(); loadBalances();},3000);} else $("depoLog").textContent="GAGAL: "+res.message; });
+ } else { hive.broadcast.transfer(activeKey, account, "honey-swap", amountStr, memo, function(err,res){ $("depoBtn").disabled=false; if(err) $("depoLog").textContent="GAGAL: "+err.message; else $("depoLog").innerHTML=`<span class="success">✓ OK</span>`; }); }
+}
+function doWd(){
+ let amt=parseFloat($("wdAmount").value)||0; if(amt<0.001){ $("wdLog").textContent="Min 0.001"; return; }
+ $("wdBtn").disabled=true; let json=JSON.stringify({contractName:"hivepegged", contractAction:"withdraw", contractPayload:{quantity: amt.toFixed(3)}});
+ function onOk(){ $("wdBtn").disabled=false; $("wdLog").innerHTML=`<span class="success">✓ WD OK</span>`; setTimeout(()=>{loadBalances(); loadNativeHive();},2500); }
+ function onErr(e){ $("wdBtn").disabled=false; $("wdLog").textContent="GAGAL: "+e.message; }
+ if(useKeychain && isKC()) window.hive_keychain.requestCustomJson(account, "ssc-mainnet-hive", "Active", json, "Withdraw", function(res){ if(res.success) onOk(); else onErr(new Error(res.message)); });
+ else hive.broadcast.customJson(activeKey,[account],[],"ssc-mainnet-hive",json,function(err,res){ if(err) onErr(err); else onOk(); });
+}
+
+function loginKC(){
+ let username=$("user").value.trim().toLowerCase().replace(/\s+/g,""); if(username.length<3){username=prompt("Username:"); if(!username) return; username=username.toLowerCase().replace(/\s+/g,"");}
+ $("kcBtn").disabled=true; $("kcBtn").textContent="MENUNGGU...";
+ window.hive_keychain.requestSignBuffer(username, "login-"+Date.now(), "Posting", async function(res){
+  $("kcBtn").disabled=false; $("kcBtn").textContent="🔑 LOGIN KEYCHAIN";
+  if(res.success){account=username.toLowerCase(); useKeychain=true; try{await loadNativeHive(); await loadBalances(); $("info").innerHTML=`<span class="success">● CONNECTED</span> @${account}`; $("swapCard").classList.remove("hidden"); $("connectedBar").classList.remove("hidden"); $("connectedUser").textContent="@"+account;}catch(e){$("info").textContent=e.message;}}else{$("kcStatus").textContent="GAGAL: "+res.message;}
+ });
+}
+async function connectManual(){
+ let u=($("userManual").value.trim()||$("user").value.trim()).toLowerCase().replace(/\s+/g,""); let k=$("key").value.trim();
+ if(u.length<3){$("info").textContent="Username invalid"; return;} if(k.length<40){$("info").textContent="Key invalid"; return;}
+ account=u; activeKey=k; useKeychain=false; try{await loadNativeHive(); await loadBalances(); $("info").innerHTML=`<span class="success">● CONNECTED</span> @${account}`; $("swapCard").classList.remove("hidden");}catch(e){$("info").textContent=e.message;}
+}
+function doLogout(){ account=""; activeKey=""; useKeychain=false; $("swapCard").classList.add("hidden"); $("connectedBar").classList.add("hidden"); $("info").textContent="Logged out."; }
+
+$("loadBtn").onclick=connectManual;
+$("fromToken").onchange=function(){ updateBalancesUI(); loadPool(); };
+$("toToken").onchange=function(){ updateBalancesUI(); loadPool(); };
+$("fromAmount").oninput=calculateSwap;
+$("slip").onchange=calculateSwap;
+window.addEventListener('load',()=>{ checkKC(); });
+</script>
+</body>
+</html>
