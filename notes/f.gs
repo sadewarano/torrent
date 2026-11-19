@@ -1,297 +1,207 @@
+// ==========================================
+// CATATAN PRIBADI - BACKEND GAS VERSI SHEET
+// Auto-create Spreadsheet + Sheet
+// ==========================================
 
-/**
- * CATATAN PRIBADI CLOUD V1.1
- * STANDALONE GOOGLE APPS SCRIPT
- * Database dibuat otomatis.
- */
+const SHEET_NAME = "Data";
+const PROP_KEY = "CATATAN_SPREADSHEET_ID";
+const SPREADSHEET_NAME = "Catatan Pribadi DB";
 
-const CONFIG = {
-  SHEET_NAME: "Users",
-  DB_PROPERTY: "DB_ID",
-  ADMIN_PROPERTY: "ADMIN_KEY",
-  MAX_SIZE: 450000
-};
-
-// =================================
-// 1. SETUP OTOMATIS
-// =================================
-
-function setup() {
+// Header: A=ID | B=UpdatedAt | C=JSON (isi akun lengkap)
+function getSheet() {
   const props = PropertiesService.getScriptProperties();
+  let ssId = props.getProperty(PROP_KEY);
+  let ss = null;
 
-  // Buat database Google Sheets otomatis
-  let dbId = props.getProperty(CONFIG.DB_PROPERTY);
-
-  if (!dbId) {
-    const ss = SpreadsheetApp.create(
-      "DATABASE CATATAN PRIBADI CLOUD"
-    );
-
-    const sh = ss.getSheets()[0];
-    sh.setName(CONFIG.SHEET_NAME);
-
-    sh.appendRow([
-      "ID",
-      "DATA_JSON",
-      "UPDATED_AT",
-      "NOTE_COUNT"
-    ]);
-
-    dbId = ss.getId();
-    props.setProperty(CONFIG.DB_PROPERTY, dbId);
+  if (ssId) {
+    try {
+      ss = SpreadsheetApp.openById(ssId);
+    } catch (e) {
+      ss = null;
+    }
   }
 
-  // Buat kunci administrator
-  let adminKey = props.getProperty(CONFIG.ADMIN_PROPERTY);
-
-  if (!adminKey) {
-    adminKey = Utilities.getUuid() +
-               Utilities.getUuid();
-
-    props.setProperty(CONFIG.ADMIN_PROPERTY, adminKey);
+  // Kalau belum ada / kehapus, bikin baru otomatis
+  if (!ss) {
+    ss = SpreadsheetApp.create(SPREADSHEET_NAME);
+    ssId = ss.getId();
+    props.setProperty(PROP_KEY, ssId);
   }
 
-  Logger.log("SETUP BERHASIL");
-  Logger.log("DATABASE: https://docs.google.com/spreadsheets/d/" + dbId);
-  Logger.log("ADMIN KEY: " + adminKey);
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+  }
+
+  // Buat header kalau sheet masih kosong
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, 3).setValues([["ID", "UpdatedAt", "JSON"]]);
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 350);
+    sheet.setColumnWidth(2, 180);
+    sheet.setColumnWidth(3, 800);
+  }
+
+  return sheet;
 }
 
-// =================================
-// 2. DATABASE
-// =================================
-
-function getSheet_() {
-  const id = PropertiesService
-    .getScriptProperties()
-    .getProperty(CONFIG.DB_PROPERTY);
-
-  if (!id) throw new Error("Jalankan setup terlebih dahulu.");
-
-  return SpreadsheetApp
-    .openById(id)
-    .getSheetByName(CONFIG.SHEET_NAME);
+function getSpreadsheetUrl() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty(PROP_KEY);
+  return id ? "https://docs.google.com/spreadsheets/d/" + id : "";
 }
 
-function validId_(id) {
-  return /^\d{25,45}$/.test(String(id || ""));
+function jsonResponse(data, callback) {
+  const output = ContentService.createTextOutput();
+  if (callback) {
+    output.setMimeType(ContentService.MimeType.JAVASCRIPT);
+    output.setContent(callback + "(" + JSON.stringify(data) + ");");
+  } else {
+    output.setMimeType(ContentService.MimeType.JSON);
+    output.setContent(JSON.stringify(data));
+  }
+  return output;
 }
 
-function findUser_(sh, id) {
-  const last = sh.getLastRow();
-
-  if (last < 2) return 0;
-
-  const found = sh.getRange(2, 1, last - 1, 1)
-    .createTextFinder(id)
-    .matchEntireCell(true)
-    .findNext();
-
-  return found ? found.getRow() : 0;
+// Cari baris berdasarkan ID, return nomor baris atau -1
+function findRowById(sheet, id) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  // Ambil kolom A saja biar cepat
+  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) return i + 2;
+  }
+  return -1;
 }
 
-// =================================
-// 3. JSONP RESPONSE
-// =================================
-
-function output_(data, callback) {
-  const cb = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(callback || "")
-    ? callback
-    : "syncCallback";
-
-  return ContentService
-    .createTextOutput(
-      cb + "(" + JSON.stringify(data) + ");"
-    )
-    .setMimeType(ContentService.MimeType.JAVASCRIPT);
+function normalizeAccount(id, data) {
+  return {
+    version: 1,
+    id: String(id),
+    notes: Array.isArray(data.notes) ? data.notes.map(n => ({
+      id: String(n.id || ""),
+      title: String(n.title || ""),
+      body: String(n.body || ""),
+      visibility: n.visibility === "public" ? "public" : "private",
+      updatedAt: Number(n.updatedAt) || Date.now()
+    })) : [],
+    updatedAt: Number(data.updatedAt) || Date.now()
+  };
 }
 
-// =================================
-// 4. GET DATA
-// =================================
-
+// ==========================================
+// GET
+// ==========================================
 function doGet(e) {
   try {
     const p = e.parameter || {};
-    const action = p.action;
-    const sh = getSheet_();
+    const action = p.action || "";
+    const callback = p.callback || "";
+    const sheet = getSheet();
 
-    // LOGIN / AMBIL CATATAN
+    // 1. GET 1 AKUN
     if (action === "get") {
-      const id = String(p.id || "");
+      const id = String(p.id || "").trim();
+      if (!id) return jsonResponse({ ok: false, error: "ID kosong" }, callback);
 
-      if (!validId_(id)) {
-        throw new Error("ID tidak valid.");
+      const row = findRowById(sheet, id);
+      if (row === -1) {
+        return jsonResponse({ ok: true, found: false, data: null }, callback);
       }
 
-      const row = findUser_(sh, id);
-
-      if (!row) {
-        return output_({
-          ok: true,
-          found: false
-        }, p.callback);
-      }
-
-      const data = JSON.parse(
-        sh.getRange(row, 2).getValue()
-      );
-
-      return output_({
-        ok: true,
-        found: true,
-        data: data
-      }, p.callback);
+      const jsonStr = sheet.getRange(row, 3).getValue();
+      const data = JSON.parse(jsonStr);
+      return jsonResponse({ ok: true, found: true, data: data }, callback);
     }
 
-    // CATATAN PUBLIK
+    // 2. GET PUBLIK
     if (action === "public") {
-      const values = sh.getDataRange().getValues();
+      const lastRow = sheet.getLastRow();
       const notes = [];
-
-      for (let i = 1; i < values.length; i++) {
-        try {
-          const data = JSON.parse(values[i][1]);
-
-          (data.notes || []).forEach(n => {
-            if (n.visibility === "public") {
-              notes.push({
-                title: String(n.title || ""),
-                body: String(n.body || ""),
-                updatedAt: Number(n.updatedAt) || 0
+      if (lastRow >= 2) {
+        const rows = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+        rows.forEach(r => {
+          try {
+            const data = JSON.parse(r[0]);
+            if (Array.isArray(data.notes)) {
+              data.notes.forEach(n => {
+                if (n.visibility === "public") {
+                  notes.push({
+                    id: String(n.id || ""),
+                    title: String(n.title || ""),
+                    body: String(n.body || ""),
+                    visibility: "public",
+                    updatedAt: Number(n.updatedAt) || 0
+                  });
+                }
               });
             }
-          });
-        } catch (err) {}
-      }
-
-      notes.sort((a,b) => b.updatedAt - a.updatedAt);
-
-      return output_({
-        ok: true,
-        notes: notes.slice(0, 300)
-      }, p.callback);
-    }
-
-    // DASHBOARD ADMIN
-    if (action === "admin") {
-      const key = PropertiesService
-        .getScriptProperties()
-        .getProperty(CONFIG.ADMIN_PROPERTY);
-
-      if (!key || p.key !== key) {
-        throw new Error("Kunci admin salah.");
-      }
-
-      const values = sh.getDataRange().getValues();
-      const users = [];
-      let totalNotes = 0;
-
-      for (let i = 1; i < values.length; i++) {
-        const count = Number(values[i][3]) || 0;
-        totalNotes += count;
-
-        users.push({
-          id: String(values[i][0]),
-          noteCount: count,
-          updatedAt: values[i][2]
-            ? new Date(values[i][2]).getTime()
-            : 0
+          } catch (err) {}
         });
       }
-
-      users.sort((a,b) => b.updatedAt - a.updatedAt);
-
-      return output_({
-        ok: true,
-        users: users,
-        totalNotes: totalNotes
-      }, p.callback);
+      notes.sort((a, b) => b.updatedAt - a.updatedAt);
+      return jsonResponse({ ok: true, notes: notes.slice(0, 100) }, callback);
     }
 
-    throw new Error("Perintah tidak dikenal.");
+    // 3. INFO - buat cek URL sheet-nya
+    if (action === "info") {
+      return jsonResponse({ ok: true, sheetUrl: getSpreadsheetUrl() }, callback);
+    }
 
+    return jsonResponse({ ok: false, error: "Action tidak dikenal" }, callback);
   } catch (err) {
-    return output_({
-      ok: false,
-      error: String(err.message || err)
-    }, e && e.parameter ? e.parameter.callback : "");
+    return jsonResponse({ ok: false, error: err.toString() }, (e.parameter && e.parameter.callback) || "");
   }
 }
 
-// =================================
-// 5. SAVE TO CLOUD
-// =================================
-
+// ==========================================
+// POST - SAVE
+// ==========================================
 function doPost(e) {
-  const lock = LockService.getScriptLock();
-
   try {
-    lock.waitLock(20000);
-
-    const body = JSON.parse(e.postData.contents || "{}");
-
-    if (body.action !== "save") {
-      throw new Error("Perintah tidak valid.");
-    }
-
-    const id = String(body.id || "");
-
-    if (!validId_(id)) {
-      throw new Error("ID tidak valid.");
-    }
-
-    const data = body.data;
-
-    if (
-      !data ||
-      String(data.id) !== id ||
-      !Array.isArray(data.notes)
-    ) {
-      throw new Error("Format catatan tidak valid.");
-    }
-
-    const json = JSON.stringify(data);
-
-    if (json.length > CONFIG.MAX_SIZE) {
-      throw new Error("Ukuran data terlalu besar.");
-    }
-
-    if (data.notes.length > 5000) {
-      throw new Error("Maksimal 5000 catatan.");
-    }
-
-    const sh = getSheet_();
-    const row = findUser_(sh, id);
-
-    const values = [[
-      id,
-      json,
-      new Date(),
-      data.notes.length
-    ]];
-
-    if (row) {
-      sh.getRange(row, 1, 1, 4).setValues(values);
+    let payload = null;
+    if (e.parameter && e.parameter.payload) {
+      payload = JSON.parse(e.parameter.payload);
+    } else if (e.postData && e.postData.contents) {
+      payload = JSON.parse(e.postData.contents);
     } else {
-      sh.appendRow(values[0]);
+      throw new Error("Payload kosong");
     }
 
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        ok: true,
-        message: "Data tersimpan."
-      }))
+    if (payload.action !== "save") throw new Error("Action POST tidak dikenal");
+
+    const id = String(payload.id || "").trim();
+    if (!/^\d{25,45}$/.test(id)) throw new Error("ID tidak valid");
+    if (!payload.data || !Array.isArray(payload.data.notes)) throw new Error("Data tidak valid");
+
+    const toSave = normalizeAccount(id, payload.data);
+    const sheet = getSheet();
+    const jsonStr = JSON.stringify(toSave);
+
+    const row = findRowById(sheet, id);
+    if (row !== -1) {
+      // Update baris yang ada
+      sheet.getRange(row, 2, 1, 2).setValues([[toSave.updatedAt, jsonStr]]);
+    } else {
+      // Tambah baris baru
+      sheet.appendRow([id, toSave.updatedAt, jsonStr]);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        ok: false,
-        error: String(err.message || err)
-      }))
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
-
-  } finally {
-    if (lock.hasLock()) lock.releaseLock();
   }
+}
+
+// ==========================================
+// FUNGSI BANTUAN - Jalankan sekali di editor
+// untuk lihat URL Sheet-nya di Log
+// ==========================================
+function cekSheetUrl() {
+  getSheet();
+  Logger.log(getSpreadsheetUrl());
 }
