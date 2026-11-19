@@ -1,0 +1,6 @@
+SETUP BERHASIL
+11.59.21	Info	DATABASE:
+ https://docs.google.com/spreadsheets/d/1faNwn3rkBfnXwntXQCLV9CfyN0qoe8on9LKsMf6eK_I
+
+11.59.21	Info	ADMIN KEY:
+ b9ed0f6b-a39c-40e5-8cf5-a2b81464b1b39e2431f2-6cdb-47aa-9b72-2ee6c5c45e1e
