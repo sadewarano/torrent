@@ -14,7 +14,7 @@ const SPREADSHEET_NAME = "Catatan Pribadi DB";
 
 // GANTI DENGAN KUNCI ADMIN MILIKMU
 // Gunakan kombinasi panjang dan sulit ditebak.
-const ADMIN_KEY = "GANTI_DENGAN_KUNCI_ADMIN_RAHASIA_2026";
+const ADMIN_KEY = "Kamubakalingat724";
 
 // STRUKTUR DATABASE:
 // A = ID
