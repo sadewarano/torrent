@@ -1,189 +1,843 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Catatan Pribadi</title>
+<meta name="theme-color" content="#f7f8fc">
+<title>Ruang Catatan</title>
+
 <style>
 :root{
---bg:#f4f6fa;--card:#fff;--ink:#172033;
---muted:#687386;--line:#e4e8ef;
---blue:#315efb;--red:#c93636;--green:#16834a
+--bg:#f5f6fa;
+--card:#ffffff;
+--ink:#20283a;
+--muted:#8490a3;
+--line:#e9ecf2;
+--blue:#5369e9;
+--blue-light:#eef0ff;
+--green:#159765;
+--red:#dc5555;
+--shadow:0 4px 20px rgba(30,45,80,.045);
 }
+
 *{box-sizing:border-box}
+
 body{
-margin:0;background:var(--bg);color:var(--ink);
-font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif
+margin:0;
+background:var(--bg);
+color:var(--ink);
+font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;
 }
-header{background:#172033;color:white;padding:18px 16px}
-header .wrap,main{max-width:900px;margin:auto}
-h1{font-size:21px;margin:0}
-header p{margin:4px 0 0;color:#cbd3e1;font-size:13px}
-main{padding:18px 14px 50px}
-.card{
-background:var(--card);border:1px solid var(--line);
-border-radius:15px;padding:16px;margin-bottom:14px;
-box-shadow:0 3px 14px #17203308
-}
-h2{font-size:17px;margin:0 0 12px}
-label{display:block;font-weight:600;font-size:13px;margin:10px 0 5px}
-input,textarea,select{
-width:100%;padding:11px 12px;border:1px solid #d5dbe5;
-border-radius:9px;font:inherit;background:white;color:var(--ink)
-}
-textarea{min-height:150px;resize:vertical}
-button,.filebtn{
-border:0;border-radius:9px;padding:10px 14px;
-font:600 14px system-ui;cursor:pointer;
-background:var(--blue);color:white
-}
-button.secondary,.filebtn.secondary{
-background:#e9edf5;color:#253149
-}
-button.danger{background:#fff0f0;color:var(--red)}
-button.green{background:var(--green)}
+
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
 button:disabled{opacity:.5;cursor:not-allowed}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.row>*{flex:0 0 auto}
-.row .grow{flex:1 1 220px}
-.small{font-size:12px;color:var(--muted)}
-.idbox{
-background:#f0f3fa;padding:12px;border-radius:9px;
-overflow-wrap:anywhere;font-family:ui-monospace,monospace;font-size:14px
-}
-.note{border:1px solid var(--line);border-radius:11px;padding:13px;margin-top:10px}
-.note h3{font-size:16px;margin:0 0 5px}
-.note p{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}
-.tag{
-display:inline-block;border-radius:20px;padding:3px 8px;
-font-size:11px;background:#eef1f7;color:#4b5870
-}
-.tag.public{background:#e6f6ed;color:#167344}
-.status{
-font-size:13px;padding:9px 11px;border-radius:9px;
-background:#eef1f7;color:#34415a;margin-top:10px;
-overflow-wrap:anywhere
-}
+
 .hidden{display:none!important}
-.empty{color:var(--muted);text-align:center;padding:24px 8px}
-.topline{
-display:flex;justify-content:space-between;
-align-items:center;gap:10px;flex-wrap:wrap
+
+/* HEADER */
+
+header{
+background:#fff;
+border-bottom:1px solid var(--line);
+position:sticky;
+top:0;
+z-index:20;
 }
-hr{border:0;border-top:1px solid var(--line);margin:14px 0}
-@media(min-width:650px){
-main{padding-top:25px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.grid .card{margin:0}
+
+.header-inner{
+max-width:1120px;
+margin:auto;
+padding:13px 20px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:15px;
+}
+
+.brand{
+display:flex;
+align-items:center;
+gap:11px;
+}
+
+.brand-icon{
+width:40px;
+height:40px;
+border-radius:13px;
+background:linear-gradient(145deg,#6278f5,#4557ce);
+display:grid;
+place-items:center;
+color:#fff;
+font-size:21px;
+font-weight:800;
+box-shadow:0 4px 12px #5369e944;
+}
+
+.brand-name{
+font-size:18px;
+font-weight:800;
+letter-spacing:-.5px;
+line-height:1.2;
+}
+
+.brand-sub{
+font-size:11px;
+color:var(--muted);
+margin-top:3px;
+}
+
+.header-right{
+display:flex;
+align-items:center;
+gap:9px;
+}
+
+.online-indicator{
+font-size:12px;
+color:var(--muted);
+display:flex;
+align-items:center;
+gap:6px;
+}
+
+.online-dot{
+width:8px;
+height:8px;
+background:#20b77b;
+border-radius:50%;
+}
+
+/* MAIN */
+
+main{
+max-width:1120px;
+margin:auto;
+padding:25px 18px 55px;
+}
+
+.welcome{
+margin-bottom:22px;
+}
+
+.welcome h1{
+font-size:25px;
+letter-spacing:-.8px;
+margin:0;
+font-weight:800;
+}
+
+.welcome p{
+margin:5px 0 0;
+color:var(--muted);
+font-size:13px;
+}
+
+/* LAYOUT */
+
+.dashboard{
+display:grid;
+grid-template-columns:340px minmax(0,1fr);
+gap:20px;
+align-items:start;
+}
+
+.left-column,.right-column{
+display:flex;
+flex-direction:column;
+gap:17px;
+min-width:0;
+}
+
+/* CARD */
+
+.card{
+background:var(--card);
+border:1px solid var(--line);
+border-radius:17px;
+padding:18px;
+box-shadow:var(--shadow);
+min-width:0;
+}
+
+.card-heading{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+margin-bottom:15px;
+}
+
+.card-heading h2{
+font-size:15px;
+margin:0;
+font-weight:750;
+letter-spacing:-.2px;
+}
+
+.heading-icon{
+width:32px;
+height:32px;
+border-radius:10px;
+background:var(--blue-light);
+color:var(--blue);
+display:grid;
+place-items:center;
+font-size:16px;
+flex-shrink:0;
+}
+
+/* BUTTON */
+
+button,.filebtn{
+border:0;
+border-radius:10px;
+padding:10px 14px;
+font-weight:650;
+font-size:13px;
+background:var(--blue);
+color:white;
+transition:.15s;
+}
+
+button:active{transform:scale(.97)}
+
+button.secondary,.filebtn.secondary{
+background:#f0f2f7;
+color:#47536a;
+}
+
+button.danger{
+background:#fff0f0;
+color:var(--red);
+}
+
+button.green{
+background:#e7f7ef;
+color:#138354;
+}
+
+button:hover:not(:disabled){
+filter:brightness(.97);
+}
+
+.row{
+display:flex;
+gap:8px;
+flex-wrap:wrap;
+align-items:center;
+}
+
+.row>*{flex:0 0 auto}
+.row .grow{flex:1 1 180px}
+
+/* FORM */
+
+label{
+display:block;
+font-size:12px;
+font-weight:700;
+margin:13px 0 6px;
+color:#46516a;
+}
+
+input,textarea,select{
+width:100%;
+border:1px solid #e1e5ee;
+background:#fafbfe;
+color:var(--ink);
+padding:12px 13px;
+border-radius:11px;
+outline:none;
+transition:.2s;
+}
+
+input:focus,textarea:focus,select:focus{
+border-color:#8090f4;
+background:#fff;
+box-shadow:0 0 0 3px #5369e916;
+}
+
+textarea{
+min-height:180px;
+resize:vertical;
+line-height:1.7;
+}
+
+input::placeholder,textarea::placeholder{
+color:#aab2c1;
+}
+
+.form-actions{
+margin-top:15px;
+}
+
+.form-actions button{
+flex:1;
+}
+
+/* ACCOUNT */
+
+.account-card{
+background:linear-gradient(145deg,#303d70,#202c52);
+color:white;
+border:0;
+}
+
+.account-card .card-heading h2{color:white}
+
+.account-card .small{
+color:#c1cbe5;
+}
+
+.idbox{
+background:#ffffff12;
+border:1px solid #ffffff1c;
+padding:12px;
+border-radius:10px;
+overflow-wrap:anywhere;
+font-family:ui-monospace,monospace;
+font-size:13px;
+color:#fff;
+margin-top:7px;
+}
+
+.account-actions{
+margin-top:12px;
+}
+
+.account-actions button{
+flex:1 1 auto;
+font-size:12px;
+padding:9px 10px;
+}
+
+.account-card button.secondary{
+background:#ffffff1b;
+color:#fff;
+}
+
+.account-card button.green{
+background:#36b981;
+color:white;
+}
+
+.account-info{
+font-size:11px;
+color:#c1cbe5;
+margin-top:12px;
+line-height:1.6;
+}
+
+/* STATUS */
+
+.status{
+font-size:12px;
+padding:10px 12px;
+border-radius:10px;
+background:#f0f2f8;
+color:#536078;
+margin-top:12px;
+overflow-wrap:anywhere;
+}
+
+.account-card .status{
+background:#ffffff12;
+color:#e5eaff;
+}
+
+/* AUTH */
+
+.auth-card{
+max-width:500px;
+margin:30px auto;
+}
+
+.auth-description{
+font-size:12px;
+color:var(--muted);
+margin:-5px 0 15px;
+line-height:1.7;
+}
+
+.auth-buttons button{
+flex:1;
+}
+
+.id-label{
+font-size:12px;
+font-weight:700;
+margin:16px 0 6px;
+display:block;
+}
+
+/* NOTE FEED */
+
+.feed-header{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+margin-bottom:15px;
+}
+
+.feed-title{
+display:flex;
+align-items:center;
+gap:10px;
+}
+
+.feed-title h2{
+margin:0;
+font-size:16px;
+font-weight:800;
+}
+
+.feed-icon{
+width:35px;
+height:35px;
+border-radius:11px;
+display:grid;
+place-items:center;
+background:#eef0ff;
+color:#5369e9;
+font-size:17px;
+}
+
+.tag{
+display:inline-flex;
+align-items:center;
+gap:4px;
+padding:4px 9px;
+border-radius:30px;
+font-size:10px;
+font-weight:700;
+background:#eff1f6;
+color:#68748a;
+}
+
+.tag.public{
+background:#e5f7ed;
+color:#168653;
+}
+
+.tag.private{
+background:#f0f1f6;
+color:#707b90;
+}
+
+/* NOTE ITEM */
+
+.note{
+background:#fff;
+border:1px solid var(--line);
+border-radius:14px;
+padding:16px;
+margin-top:11px;
+transition:.2s;
+min-width:0;
+}
+
+.note:first-child{margin-top:0}
+
+.note:hover{
+border-color:#dce1f4;
+box-shadow:0 4px 15px #25365c08;
+}
+
+.note-top{
+display:flex;
+align-items:flex-start;
+justify-content:space-between;
+gap:10px;
+}
+
+.note h3{
+font-size:15px;
+line-height:1.4;
+font-weight:750;
+margin:0;
+overflow-wrap:anywhere;
+}
+
+.note-meta{
+display:flex;
+align-items:center;
+gap:7px;
+flex-wrap:wrap;
+margin-top:7px;
+}
+
+.note-date{
+font-size:11px;
+color:var(--muted);
+}
+
+.note p{
+white-space:pre-wrap;
+overflow-wrap:anywhere;
+word-break:break-word;
+margin:13px 0;
+font-size:13px;
+line-height:1.85;
+color:#4d586c;
+}
+
+.note-footer{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:8px;
+padding-top:11px;
+border-top:1px solid #f0f1f5;
+}
+
+.note-footer .row{gap:6px}
+
+.note-footer button{
+padding:7px 11px;
+font-size:11px;
+}
+
+.note-owner{
+font-size:11px;
+color:#9aa3b3;
+}
+
+/* EMPTY */
+
+.empty{
+color:var(--muted);
+text-align:center;
+padding:32px 10px;
+font-size:13px;
+}
+
+.empty-icon{
+font-size:30px;
+opacity:.55;
+margin-bottom:8px;
+}
+
+.empty strong{
+display:block;
+color:#5a657b;
+margin-bottom:3px;
+font-size:13px;
+}
+
+/* PUBLIC */
+
+.public-section{
+margin-top:20px;
+}
+
+.public-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:10px;
+margin-bottom:14px;
+}
+
+.public-header h2{
+font-size:16px;
+margin:0;
+font-weight:800;
+}
+
+.public-description{
+font-size:12px;
+color:var(--muted);
+margin:4px 0 0;
+}
+
+.public-note{
+border-left:3px solid #55bb8a;
+}
+
+.public-note .note-footer{
+border-top:0;
+padding-top:0;
+}
+
+/* DIVIDER */
+
+hr{
+border:0;
+border-top:1px solid var(--line);
+margin:16px 0;
+}
+
+.small{
+font-size:11px;
+color:var(--muted);
+line-height:1.7;
+}
+
+/* MOBILE */
+
+@media(max-width:760px){
+
+.header-inner{
+padding:11px 15px;
+}
+
+.brand-icon{
+width:36px;
+height:36px;
+}
+
+.brand-name{font-size:16px}
+
+.online-indicator{font-size:0}
+
+main{
+padding:19px 12px 40px;
+}
+
+.welcome{
+margin-bottom:17px;
+}
+
+.welcome h1{font-size:22px}
+
+.dashboard{
+grid-template-columns:1fr;
+gap:15px;
+}
+
+.left-column,.right-column{gap:14px}
+
+.card{
+padding:15px;
+border-radius:15px;
+}
+
+.account-card{order:0}
+
+textarea{min-height:155px}
+
+.note{padding:14px}
+
+.note p{font-size:13px}
+
+.public-section{margin-top:16px}
+}
+
+@media(min-width:761px){
+.auth-card{margin-top:45px}
 }
 </style>
 </head>
+
 <body>
 
 <header>
-<div class="wrap">
-<h1>Catatan Pribadi</h1>
-<p>Simpan catatan secara lokal atau cadangkan ke cloud.</p>
+<div class="header-inner">
+
+<div class="brand">
+<div class="brand-icon">✎</div>
+<div>
+<div class="brand-name">Ruang Catatan</div>
+<div class="brand-sub">Tempat menyimpan setiap cerita</div>
+</div>
+</div>
+
+<div class="header-right">
+<div class="online-indicator">
+<span class="online-dot"></span>
+Catatan digital
+</div>
+</div>
+
 </div>
 </header>
 
 <main>
 
-<section id="authArea" class="card">
-<h2>Akses akun</h2>
-<p class="small">
-Buat ID baru atau masukkan ID yang sudah kamu miliki.
-ID adalah kunci akses akun; simpan baik-baik dan jangan bagikan.
+<div class="welcome">
+<h1>Ruang untuk menuangkan pikiran.</h1>
+<p>Tulis, simpan, dan bagikan catatanmu dalam satu tempat.</p>
+</div>
+
+<!-- =====================================
+AKSES AKUN
+===================================== -->
+
+<section id="authArea" class="card auth-card">
+
+<div class="card-heading">
+<div class="feed-title">
+<div class="heading-icon">🔐</div>
+<h2>Selamat datang</h2>
+</div>
+</div>
+
+<p class="auth-description">
+Masuk menggunakan ID pribadimu atau buat akun baru.
+Semua catatan akan tersimpan di perangkat dan bisa dicadangkan ke cloud.
 </p>
 
-<div class="row">
-<button id="generateBtn">Buat ID Pribadi Baru</button>
+<div class="row auth-buttons">
+<button id="generateBtn">＋ Buat ID Baru</button>
 <button id="importBtn" class="secondary">Impor JSON</button>
 <input id="importFile" type="file" accept=".json,application/json" class="hidden">
 </div>
 
-<label for="loginId">ID Unix pribadi</label>
-<input id="loginId" inputmode="numeric" autocomplete="off" placeholder="Masukkan ID pribadi">
+<label class="id-label" for="loginId">ID pribadi</label>
+<input id="loginId" inputmode="numeric" autocomplete="off" placeholder="Masukkan ID akun">
 
-<div class="row" style="margin-top:10px">
-<button id="loginBtn">Masuk dengan ID</button>
+<div style="margin-top:12px">
+<button id="loginBtn" style="width:100%">Masuk ke Ruang Catatan →</button>
 </div>
 
-<div id="authStatus" class="status">Belum masuk.</div>
+<div id="authStatus" class="status">Belum masuk. Silakan buat ID atau masukkan ID akun.</div>
+
 </section>
+
+<!-- =====================================
+APLIKASI UTAMA
+===================================== -->
 
 <section id="appArea" class="hidden">
 
-<div class="card">
-<div class="topline">
-<h2>Akun aktif</h2>
-<button id="logoutBtn" class="danger">Logout</button>
+<div class="dashboard">
+
+<!-- KOLOM KIRI -->
+
+<div class="left-column">
+
+<!-- AKUN -->
+
+<section class="card account-card">
+
+<div class="card-heading">
+<h2>✦ Akun Saya</h2>
+<button id="logoutBtn" class="danger">Keluar</button>
 </div>
 
-<div class="small">ID pribadi (rahasia)</div>
+<div class="small">ID pribadi · Simpan dengan aman</div>
 <div id="currentId" class="idbox"></div>
 
-<div class="row" style="margin-top:9px">
+<div class="row account-actions">
 <button id="copyIdBtn" class="secondary">Salin ID</button>
-<button id="saveCloudBtn" class="green">Save to Cloud</button>
-<button id="exportBtn" class="secondary">Ekspor JSON</button>
+<button id="exportBtn" class="secondary">Ekspor</button>
+<button id="saveCloudBtn" class="green">☁ Simpan Cloud</button>
 </div>
 
-<div id="appStatus" class="status">Catatan tersimpan lokal.</div>
-
-<p class="small">
-Cloud hanya diperbarui saat kamu menekan Save to Cloud.
-Perubahan setelah itu tetap lokal sampai disimpan lagi.
-</p>
+<div id="appStatus" class="status">
+Catatan tersimpan secara lokal.
 </div>
 
-<div class="grid">
+<div class="account-info">
+Penyimpanan cloud hanya diperbarui ketika kamu menekan tombol Simpan Cloud. Pastikan melakukan pencadangan setelah mengubah catatan.
+</div>
+
+</section>
+
+<!-- FORM CATATAN -->
 
 <section class="card">
-<h2 id="formHeading">Buat catatan</h2>
 
-<label for="noteTitle">Judul</label>
-<input id="noteTitle" maxlength="160" placeholder="Judul catatan">
+<div class="card-heading">
+<div class="feed-title">
+<div class="heading-icon">✎</div>
+<h2 id="formHeading">Tulis Catatan</h2>
+</div>
+</div>
+
+<label for="noteTitle">Judul catatan</label>
+<input id="noteTitle" maxlength="160" placeholder="Apa yang ingin kamu tulis?">
 
 <label for="noteBody">Isi catatan</label>
-<textarea id="noteBody" placeholder="Tulis catatan di sini..."></textarea>
+<textarea id="noteBody" placeholder="Mulai tuliskan cerita, ide, pemikiran, atau hal penting di sini..."></textarea>
 
-<label for="noteVisibility">Visibilitas</label>
+<label for="noteVisibility">Siapa yang bisa membaca?</label>
 <select id="noteVisibility">
-<option value="private">Privat — hanya pemilik ID</option>
-<option value="public">Publik — dapat dilihat siapa saja</option>
+<option value="private">🔒 Privat — Hanya saya</option>
+<option value="public">🌐 Publik — Semua orang</option>
 </select>
 
-<div class="row" style="margin-top:12px">
+<div class="form-actions row">
 <button id="saveNoteBtn">Simpan Catatan</button>
-<button id="cancelEditBtn" class="secondary hidden">Batal Edit</button>
+<button id="cancelEditBtn" class="secondary hidden">Batal</button>
 </div>
+
+<p class="small" style="margin:12px 0 0">
+Catatan privat hanya terlihat di akunmu. Catatan publik dapat ditampilkan kepada pengunjung lain.
+</p>
+
 </section>
 
+</div>
+
+<!-- KOLOM KANAN -->
+
+<div class="right-column">
+
+<!-- CATATAN SAYA -->
+
 <section class="card">
-<div class="topline">
-<h2>Catatan saya</h2>
+
+<div class="feed-header">
+<div class="feed-title">
+<div class="feed-icon">▤</div>
+<div>
+<h2>Catatan Saya</h2>
+<div class="small">Kumpulan tulisan dan pemikiranmu</div>
+</div>
+</div>
+
 <span id="noteCount" class="tag">0 catatan</span>
 </div>
+
 <div id="notesList">
-<div class="empty">Belum ada catatan.</div>
+
+<div class="empty">
+<div class="empty-icon">📝</div>
+<strong>Belum ada catatan</strong>
+Mulai tuliskan sesuatu untuk mengisi ruang ini.
 </div>
+
+</div>
+
 </section>
 
+<!-- CATATAN PUBLIK -->
+
+<section class="card public-section">
+
+<div class="public-header">
+<div>
+<div class="feed-title">
+<div class="feed-icon" style="background:#e5f7ed;color:#159765">◎</div>
+<h2>Ruang Publik</h2>
+</div>
+<p class="public-description">Berbagai catatan yang dibagikan kepada semua orang.</p>
 </div>
 
-<section class="card">
-<div class="topline">
-<h2>Catatan publik</h2>
-<button id="loadPublicBtn" class="secondary">Muat catatan publik</button>
+<button id="loadPublicBtn" class="secondary">↻ Muat</button>
 </div>
+
+<hr>
+
 <div id="publicList">
-<div class="empty">Tekan tombol untuk melihat catatan publik.</div>
+<div class="empty">
+<div class="empty-icon">🌐</div>
+<strong>Jelajahi catatan publik</strong>
+Tekan tombol muat untuk melihat tulisan yang dibagikan.
 </div>
-</section>
+</div>
 
 </section>
+
+</div>
+
+</div>
+
+</section>
+
 </main>
 
 <script>
@@ -265,10 +919,29 @@ function normalizeAccount(data,id){
 }
 
 // ==========================================
+// FORMAT TANGGAL
+// ==========================================
+
+function formatDate(timestamp){
+  try{
+    return new Date(timestamp).toLocaleString("id-ID",{
+      day:"numeric",
+      month:"short",
+      year:"numeric",
+      hour:"2-digit",
+      minute:"2-digit"
+    });
+  }catch(e){
+    return "";
+  }
+}
+
+// ==========================================
 // TAMPILAN
 // ==========================================
 
 function render(){
+
   $("authArea").classList.toggle("hidden",!!account);
   $("appArea").classList.toggle("hidden",!account);
 
@@ -281,32 +954,71 @@ function render(){
   host.replaceChildren();
 
   if(!account.notes.length){
-    host.innerHTML='<div class="empty">Belum ada catatan.</div>';
+
+    const empty=document.createElement("div");
+    empty.className="empty";
+
+    const icon=document.createElement("div");
+    icon.className="empty-icon";
+    icon.textContent="📝";
+
+    const strong=document.createElement("strong");
+    strong.textContent="Belum ada catatan";
+
+    const message=document.createTextNode(
+      "Mulai tuliskan sesuatu untuk mengisi ruang ini."
+    );
+
+    empty.append(icon,strong,message);
+    host.append(empty);
+
     return;
   }
 
   [...account.notes]
     .sort((a,b)=>b.updatedAt-a.updatedAt)
     .forEach(n=>{
+
       const box=document.createElement("article");
       box.className="note";
+
+      const top=document.createElement("div");
+      top.className="note-top";
 
       const title=document.createElement("h3");
       title.textContent=n.title||"(Tanpa judul)";
 
+      top.append(title);
+
+      const meta=document.createElement("div");
+      meta.className="note-meta";
+
       const tag=document.createElement("span");
-      tag.className="tag "+(n.visibility==="public"?"public":"");
-      tag.textContent=n.visibility==="public"?"Publik":"Privat";
+      tag.className="tag "+(n.visibility==="public"?"public":"private");
+      tag.textContent=n.visibility==="public"?"🌐 Publik":"🔒 Privat";
+
+      const date=document.createElement("span");
+      date.className="note-date";
+      date.textContent=formatDate(n.updatedAt);
+
+      meta.append(tag,date);
 
       const body=document.createElement("p");
       body.textContent=n.body;
+
+      const footer=document.createElement("div");
+      footer.className="note-footer";
+
+      const owner=document.createElement("span");
+      owner.className="note-owner";
+      owner.textContent="Catatan saya";
 
       const actions=document.createElement("div");
       actions.className="row";
 
       const edit=document.createElement("button");
       edit.className="secondary";
-      edit.textContent="Edit";
+      edit.textContent="✎ Edit";
       edit.onclick=()=>editNote(n.id);
 
       const del=document.createElement("button");
@@ -315,7 +1027,9 @@ function render(){
       del.onclick=()=>deleteNote(n.id);
 
       actions.append(edit,del);
-      box.append(title,tag,body,actions);
+      footer.append(owner,actions);
+
+      box.append(top,meta,body,footer);
       host.append(box);
     });
 }
@@ -329,7 +1043,7 @@ function enterAccount(data,id,message){
 
 function resetForm(){
   editingId=null;
-  $("formHeading").textContent="Buat catatan";
+  $("formHeading").textContent="Tulis Catatan";
   $("noteTitle").value="";
   $("noteBody").value="";
   $("noteVisibility").value="private";
@@ -346,7 +1060,7 @@ function editNote(id){
   if(!n)return;
 
   editingId=id;
-  $("formHeading").textContent="Edit catatan";
+  $("formHeading").textContent="Edit Catatan";
   $("noteTitle").value=n.title;
   $("noteBody").value=n.body;
   $("noteVisibility").value=n.visibility;
@@ -366,7 +1080,7 @@ function deleteNote(id){
   persistLocal();
   render();
 
-  status("Catatan dihapus secara lokal. Tekan Save to Cloud untuk menyimpan penghapusan ke cloud.");
+  status("Catatan dihapus secara lokal. Tekan Simpan Cloud untuk menyimpan penghapusan ke cloud.");
 }
 
 // ==========================================
@@ -594,7 +1308,7 @@ $("saveNoteBtn").onclick=()=>{
   resetForm();
   render();
 
-  status("Catatan tersimpan lokal. Tekan Save to Cloud untuk mencadangkan.");
+  status("Catatan tersimpan lokal. Tekan Simpan Cloud untuk mencadangkan.");
 };
 
 $("cancelEditBtn").onclick=resetForm;
@@ -765,7 +1479,7 @@ $("importFile").onchange=async e=>{
     enterAccount(
       data,
       id,
-      "Impor berhasil. Kamu otomatis masuk menggunakan ID dari file JSON. Data impor masih lokal; tekan Save to Cloud untuk mengunggah."
+      "Impor berhasil. Kamu otomatis masuk menggunakan ID dari file JSON. Data impor masih lokal; tekan Simpan Cloud untuk mengunggah."
     );
 
   }catch(err){
@@ -782,7 +1496,7 @@ $("importFile").onchange=async e=>{
 $("loadPublicBtn").onclick=async()=>{
 
   const host=$("publicList");
-  host.textContent="Memuat...";
+  host.textContent="Memuat catatan publik...";
 
   try{
 
@@ -793,26 +1507,62 @@ $("loadPublicBtn").onclick=async()=>{
     host.replaceChildren();
 
     if(!result.notes.length){
-      host.textContent="Belum ada catatan publik.";
+
+      const empty=document.createElement("div");
+      empty.className="empty";
+
+      const icon=document.createElement("div");
+      icon.className="empty-icon";
+      icon.textContent="🌐";
+
+      const strong=document.createElement("strong");
+      strong.textContent="Belum ada catatan publik";
+
+      empty.append(icon,strong);
+      host.append(empty);
+
       return;
     }
 
     result.notes.forEach(n=>{
 
       const box=document.createElement("article");
-      box.className="note";
+      box.className="note public-note";
+
+      const top=document.createElement("div");
+      top.className="note-top";
 
       const h=document.createElement("h3");
       h.textContent=n.title||"(Tanpa judul)";
 
-      const p=document.createElement("p");
-      p.textContent=n.body;
+      top.append(h);
+
+      const meta=document.createElement("div");
+      meta.className="note-meta";
 
       const tag=document.createElement("span");
       tag.className="tag public";
-      tag.textContent="Publik";
+      tag.textContent="🌐 Publik";
 
-      box.append(h,tag,p);
+      const date=document.createElement("span");
+      date.className="note-date";
+      date.textContent=formatDate(Number(n.updatedAt)||Date.now());
+
+      meta.append(tag,date);
+
+      const p=document.createElement("p");
+      p.textContent=n.body;
+
+      const footer=document.createElement("div");
+      footer.className="note-footer";
+
+      const owner=document.createElement("span");
+      owner.className="note-owner";
+      owner.textContent="Dibagikan ke ruang publik";
+
+      footer.append(owner);
+
+      box.append(top,meta,p,footer);
       host.append(box);
     });
 
